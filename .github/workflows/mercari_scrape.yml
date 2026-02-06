@@ -1,209 +1,39 @@
-import json, re, time, random
-from datetime import datetime, timezone
-from pathlib import Path
+name: Mercari Sold Scraper
 
-import requests
-from bs4 import BeautifulSoup
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 1 * * *"
 
-OUT = Path("data/sold.json")
-OUT.parent.mkdir(parents=True, exist_ok=True)
+permissions:
+  contents: write
 
-KEYWORDS = [
-    "pokemon park kanto pin",
-    "ポケパークカントー ピンズ ピンバッジ",
-]
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
 
-# 抓最近幾頁（可調大，但先小一點避免被擋）
-MAX_PAGES_PER_KEYWORD = 3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-# 節流
-SLEEP_BETWEEN_PAGES = (1.2, 2.4)
-SLEEP_BETWEEN_ITEMS = (0.8, 1.6)
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-UA_LIST = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_2) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.2 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-]
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
 
-def sess() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({
-        "User-Agent": random.choice(UA_LIST),
-        "Accept-Language": "ja,en;q=0.9,zh-TW;q=0.8,zh;q=0.7",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-    })
-    return s
+      - name: Run Mercari scraper
+        run: |
+          python scripts/scrape_mercari.py
 
-def pad4(n:int)->str:
-    return str(n).zfill(4)
-
-def extract_no(title: str):
-    """
-    從標題抽 No. #### 或 No #### 或 #####（1~151）
-    """
-    if not title:
-        return None
-    m = re.search(r"(?:No\.?\s*|#)\s*(\d{1,4})", title, re.IGNORECASE)
-    if not m:
-        return None
-    no = int(m.group(1))
-    if 1 <= no <= 151:
-        return no
-    return None
-
-def parse_price_jpy(text: str):
-    """
-    抓 '¥12,345' / '￥12,345' / '12,345円'
-    """
-    if not text:
-        return None
-    m = re.search(r"[¥￥]\s*([\d,]+)", text)
-    if not m:
-        m = re.search(r"([\d,]+)\s*円", text)
-    if not m:
-        return None
-    return int(m.group(1).replace(",", ""))
-
-def fetch_search_html(s: requests.Session, keyword: str, page: int):
-    # 用 jp.mercari.com（比較好抓）
-    q = requests.utils.quote(keyword)
-    url = f"https://jp.mercari.com/search?keyword={q}&page={page}"
-    r = s.get(url, timeout=25)
-    r.raise_for_status()
-    return r.text, url
-
-def parse_item_links_from_search(html: str):
-    """
-    從搜尋結果頁抓商品連結
-    """
-    soup = BeautifulSoup(html, "html.parser")
-    links = set()
-
-    for a in soup.select('a[href^="/item/"]'):
-        href = a.get("href")
-        if not href:
-            continue
-        if href.startswith("/"):
-            href = "https://jp.mercari.com" + href
-        # 去掉 query
-        href = href.split("?")[0]
-        links.add(href)
-
-    return sorted(links)
-
-def fetch_item_html(s: requests.Session, item_url: str):
-    r = s.get(item_url, timeout=25)
-    r.raise_for_status()
-    return r.text
-
-def parse_item_page(html: str, item_url: str):
-    """
-    盡量從頁面 text 抽：
-    - title
-    - sold 여부（包含 SOLD / 売り切れ / 取引完了等字樣）
-    - price
-    """
-    soup = BeautifulSoup(html, "html.parser")
-
-    title = None
-    og = soup.find("meta", {"property": "og:title"})
-    if og and og.get("content"):
-        title = og["content"].strip()
-
-    if not title:
-        h1 = soup.find(["h1","h2"])
-        if h1:
-            title = h1.get_text(" ", strip=True)
-
-    text_all = soup.get_text(" ", strip=True)
-
-    # Sold 判斷：頁面常見字樣
-    sold = False
-    sold_markers = ["SOLD", "売り切れ", "取引完了", "売却済み", "販売停止"]
-    for mk in sold_markers:
-        if mk in text_all:
-            sold = True
-            break
-
-    price = None
-    # 先抓 meta og:description 或頁面文字中的 ¥
-    desc = soup.find("meta", {"property": "og:description"})
-    if desc and desc.get("content"):
-        price = parse_price_jpy(desc["content"])
-    if price is None:
-        price = parse_price_jpy(text_all)
-
-    return {
-        "title": title or "",
-        "sold": sold,
-        "price_jpy": price,
-        "item_url": item_url
-    }
-
-def main():
-    s = sess()
-
-    results = []
-    seen_urls = set()
-
-    for kw in KEYWORDS:
-        for page in range(1, MAX_PAGES_PER_KEYWORD + 1):
-            html, search_url = fetch_search_html(s, kw, page)
-            links = parse_item_links_from_search(html)
-
-            # 如果搜尋頁抓不到任何 /item/ 連結，直接記錄一下（避免默默 0）
-            if not links:
-                print(f"[WARN] No links parsed: keyword='{kw}' page={page} url={search_url}")
-
-            for item_url in links:
-                if item_url in seen_urls:
-                    continue
-                seen_urls.add(item_url)
-
-                time.sleep(random.uniform(*SLEEP_BETWEEN_ITEMS))
-                try:
-                    item_html = fetch_item_html(s, item_url)
-                    item = parse_item_page(item_html, item_url)
-
-                    # 只收：已售出 + 標題含 No.
-                    no = extract_no(item["title"])
-                    if not no:
-                        continue
-                    if not item["sold"]:
-                        continue
-                    if item["price_jpy"] is None:
-                        continue
-
-                    results.append({
-                        "no": no,
-                        "title": item["title"],
-                        "price_jpy": item["price_jpy"],
-                        "item_url": item["item_url"],
-                        "keyword": kw,
-                        "fetched_at": datetime.now(timezone.utc).isoformat()
-                    })
-
-                except Exception as e:
-                    print(f"[ERR] {item_url} -> {e}")
-
-            time.sleep(random.uniform(*SLEEP_BETWEEN_PAGES))
-
-    # 依編號 + 時間排序（新到舊）
-    def key(x):
-        return (x["no"], x["fetched_at"])
-    results.sort(key=key)
-
-    out = {
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "count": len(results),
-        "items": results
-    }
-
-    OUT.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[OK] wrote {OUT} items={len(results)}")
-
-if __name__ == "__main__":
-    main()
+      - name: Commit and push data
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add data/sold.json
+          git commit -m "Update Mercari sold data" || echo "No changes"
+          git push
