@@ -1,155 +1,338 @@
 import json, re, time, random
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
 import requests
-from bs4 import BeautifulSoup
 
 OUT = Path("data/sold.json")
 OUT.parent.mkdir(parents=True, exist_ok=True)
 
 KEYWORDS = [
     "pokemon park kanto pin",
-    "ポケパークカントー ピンズ ピンバッチ",
+    "ポケパークカントー ピンズ ピンバッジ",
 ]
 
-# 低頻率抓取，避免造成負擔/觸發防護
-SLEEP_BETWEEN_PAGES = (1.2, 2.4)
-SLEEP_BETWEEN_ITEMS = (0.9, 1.8)
-MAX_SEARCH_PAGES = 3          # 每個關鍵字最多翻幾頁（先保守）
-MAX_ITEMS_PER_KEYWORD = 80    # 每個關鍵字最多處理幾個商品頁
+MAX_PAGES_PER_KEYWORD = 5
+SLEEP_BETWEEN_REQ = (1.0, 2.2)
+TIMEOUT = 25
 
-UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36"
+UA_LIST = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_2) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.2 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+]
 
-NO_RE = re.compile(r"(?:No\.?\s*|NO\.?\s*)(\d{1,4})", re.IGNORECASE)
+SOLD_MARKERS = [
+    "SOLD", "売り切れ", "取引完了", "売却済み"
+]
 
-def jitter(a_b):
-    a, b = a_b
-    time.sleep(random.uniform(a, b))
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
 
-def get(url):
-    r = requests.get(url, headers={"User-Agent": UA}, timeout=30)
+def pad4(n: int) -> str:
+    return str(n).zfill(4)
+
+def extract_no(title: str) -> Optional[int]:
+    if not title:
+        return None
+    m = re.search(r"(?:No\.?\s*|#)\s*(\d{1,4})", title, re.IGNORECASE)
+    if not m:
+        return None
+    n = int(m.group(1))
+    return n if 1 <= n <= 151 else None
+
+def parse_price_jpy_from_any(x: Any) -> Optional[int]:
+    # 可能是 int, str("12345"), str("¥12,345"), "12,345円"
+    if x is None:
+        return None
+    if isinstance(x, (int, float)):
+        v = int(x)
+        return v if v > 0 else None
+    if isinstance(x, str):
+        s = x.strip()
+        m = re.search(r"[¥￥]\s*([\d,]+)", s)
+        if not m:
+            m = re.search(r"([\d,]+)\s*円", s)
+        if not m and re.fullmatch(r"[\d,]+", s):
+            m = re.match(r"([\d,]+)", s)
+        if not m:
+            return None
+        return int(m.group(1).replace(",", ""))
+    return None
+
+def jitter():
+    time.sleep(random.uniform(*SLEEP_BETWEEN_REQ))
+
+def make_session() -> requests.Session:
+    s = requests.Session()
+    s.headers.update({
+        "User-Agent": random.choice(UA_LIST),
+        "Accept-Language": "ja,en;q=0.9,zh-TW;q=0.8,zh;q=0.7",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    })
+    return s
+
+def get_html(s: requests.Session, url: str) -> str:
+    r = s.get(url, timeout=TIMEOUT)
     r.raise_for_status()
     return r.text
 
-def parse_search_links(html):
-    soup = BeautifulSoup(html, "html.parser")
-    links = set()
-    # Mercari 搜尋頁通常會有 a[href*="/items/"] 或 a[href*="/item/"]
-    for a in soup.select('a[href]'):
-        href = a.get("href") or ""
-        if "/items/" in href or "/item/" in href:
-            if href.startswith("/"):
-                href = "https://tw.mercari.com" + href
-            if href.startswith("https://tw.mercari.com/"):
-                links.add(href.split("?")[0])
-    return list(links)
-
-def parse_item_page(url, html, keyword):
-    soup = BeautifulSoup(html, "html.parser")
-    title = (soup.find("h1").get_text(strip=True) if soup.find("h1") else "").strip()
-    if not title:
-        # 後備：title tag
-        t = soup.find("title")
-        title = t.get_text(strip=True) if t else ""
-
-    m = NO_RE.search(title)
+def extract_next_data_json(html: str) -> Optional[Dict[str, Any]]:
+    # Next.js: <script id="__NEXT_DATA__" type="application/json">...</script>
+    m = re.search(r'<script[^>]+id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL | re.IGNORECASE)
     if not m:
         return None
-    no = int(m.group(1))
-    if no < 1 or no > 151:
+    raw = m.group(1).strip()
+    try:
+        return json.loads(raw)
+    except Exception:
         return None
 
-    text = soup.get_text("\n", strip=True)
+def walk_find_dicts(obj: Any, want_keys: Tuple[str, ...]) -> List[Dict[str, Any]]:
+    found = []
+    stack = [obj]
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, dict):
+            if all(k in cur for k in want_keys):
+                found.append(cur)
+            for v in cur.values():
+                stack.append(v)
+        elif isinstance(cur, list):
+            stack.extend(cur)
+    return found
 
-    # sold 判斷：頁面會出現 sold / 售完 / 已售出 等字樣
-    sold = ("sold" in text.lower()) or ("售完" in text) or ("已售出" in text)
-    if not sold:
+def normalize_item_url(path_or_url: str) -> Optional[str]:
+    if not path_or_url:
         return None
+    u = path_or_url.strip()
+    if u.startswith("http"):
+        return u.split("?")[0]
+    if u.startswith("/"):
+        return ("https://jp.mercari.com" + u).split("?")[0]
+    return None
 
-    # 價格：優先抓 (JP¥x,xxx) 形式
-    price_jpy = None
-    jpy_m = re.search(r"\(JP¥\s*([\d,]+)\)", text)
-    if jpy_m:
-        price_jpy = int(jpy_m.group(1).replace(",", ""))
-    else:
-        # 後備：直接找 JP¥xxxx
-        jpy_m2 = re.search(r"JP¥\s*([\d,]+)", text)
-        if jpy_m2:
-            price_jpy = int(jpy_m2.group(1).replace(",", ""))
+def is_sold_from_fields(d: Dict[str, Any]) -> bool:
+    # 常見欄位：status / itemStatus / item_status / sold / isSoldOut 等
+    for k in ("sold", "isSoldOut", "is_sold_out"):
+        if k in d and isinstance(d[k], bool) and d[k]:
+            return True
+    for k in ("status", "itemStatus", "item_status", "transactionStatus", "transaction_status"):
+        v = d.get(k)
+        if isinstance(v, str):
+            vv = v.lower()
+            if any(x in vv for x in ["sold", "soldout", "sold_out", "completed", "trading", "finish", "finished"]):
+                return True
+    return False
 
-    if price_jpy is None:
-        return None
+def has_sold_marker_text(text: str) -> bool:
+    if not text:
+        return False
+    return any(mk in text for mk in SOLD_MARKERS)
 
-    # sold_at：Mercari 顯示可能是「1 天前」這種相對時間；先用抓取時間當 sold_at（可接受）
-    sold_at = datetime.now(timezone.utc).isoformat()
+def parse_search_items_from_next_data(next_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    針對搜尋頁：盡量從 __NEXT_DATA__ 中找出 item-like dict
+    常見會有 name/title, id, price, status 等
+    """
+    candidates = []
+    # 以較寬鬆條件找 "id"+"name" 或 "id"+"title"
+    candidates.extend(walk_find_dicts(next_data, ("id", "name")))
+    candidates.extend(walk_find_dicts(next_data, ("id", "title")))
+    # 去重（用 id）
+    seen = set()
+    out = []
+    for d in candidates:
+        iid = d.get("id")
+        if iid is None:
+            continue
+        key = str(iid)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(d)
+    return out
 
-    # 嘗試從標題擷取寶可夢名：通常 No. #### 後面會跟日文名/中文名
-    name = ""
-    # e.g. "... No. 0138 オムナイト" / "... No. 0138 菊石獸"
-    after = title[m.end():].strip()
-    # 清掉常見字
-    after = re.sub(r"^[\-\—\:\｜\|]+", "", after).strip()
-    # 取第一段像名字的 token
-    if after:
-        name = after.split()[0].strip()
+def parse_item_from_item_page(next_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    item page 會有更完整的 item 物件
+    我們用最常見的特徵：包含 name/title + price + status 之類
+    """
+    # 先找包含 price 的 dict
+    dicts = walk_find_dicts(next_data, ("price",))
+    # 從中挑有 name/title 的
+    best = None
+    for d in dicts:
+        if ("name" in d or "title" in d) and ("id" in d or "itemId" in d or "item_id" in d):
+            best = d
+            break
+    if best:
+        return best
 
-    return {
-        "keyword": keyword,
-        "item_url": url,
-        "title": title,
-        "no": no,
-        "pokemon_name": name,
-        "price_jpy": price_jpy,
-        "sold_at": sold_at,
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
-    }
+    # 退而求其次：直接找 props.pageProps.item
+    cur = next_data
+    for k in ("props", "pageProps", "item"):
+        if isinstance(cur, dict) and k in cur:
+            cur = cur[k]
+        else:
+            cur = None
+            break
+    if isinstance(cur, dict):
+        return cur
+    return None
+
+def extract_link_paths_from_html(html: str) -> List[str]:
+    # fallback：從 HTML 抓 /item/xxxxx 連結
+    links = set(re.findall(r'href="(/item/[^"?]+)"', html))
+    return ["https://jp.mercari.com" + p for p in sorted(links)]
+
+def pick_title(d: Dict[str, Any]) -> str:
+    for k in ("name", "title"):
+        v = d.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
+
+def pick_price(d: Dict[str, Any]) -> Optional[int]:
+    # price 可能在 price / priceValue / itemPrice 等
+    for k in ("price", "priceValue", "itemPrice", "item_price"):
+        if k in d:
+            p = parse_price_jpy_from_any(d.get(k))
+            if p is not None:
+                return p
+    # 有些會在 "price" dict 裡
+    if isinstance(d.get("price"), dict):
+        for kk in ("value", "amount"):
+            p = parse_price_jpy_from_any(d["price"].get(kk))
+            if p is not None:
+                return p
+    return None
+
+def pick_url(d: Dict[str, Any]) -> Optional[str]:
+    for k in ("path", "url", "webUrl", "web_url", "link"):
+        v = d.get(k)
+        if isinstance(v, str):
+            u = normalize_item_url(v)
+            if u:
+                return u
+    # 有些只給 id，就用 /item/{id}
+    iid = d.get("id") or d.get("itemId") or d.get("item_id")
+    if isinstance(iid, str) and iid:
+        return f"https://jp.mercari.com/item/{iid}"
+    return None
+
+def fetch_search_and_collect(s: requests.Session, keyword: str) -> List[str]:
+    """
+    回傳 item_url 清單（從搜尋頁 next_data 或 HTML fallback 抽出來）
+    """
+    item_urls: List[str] = []
+    q = requests.utils.quote(keyword)
+
+    for page in range(1, MAX_PAGES_PER_KEYWORD + 1):
+        url = f"https://jp.mercari.com/search?keyword={q}&page={page}"
+        try:
+            html = get_html(s, url)
+        except Exception as e:
+            print(f"[ERR] search fetch: {url} -> {e}")
+            continue
+
+        nd = extract_next_data_json(html)
+        if nd:
+            items = parse_search_items_from_next_data(nd)
+            got = 0
+            for it in items:
+                u = pick_url(it)
+                if u and "/item/" in u:
+                    item_urls.append(u)
+                    got += 1
+            print(f"[OK] search next_data: kw='{keyword}' page={page} items={got}")
+        else:
+            links = extract_link_paths_from_html(html)
+            print(f"[WARN] search no next_data: kw='{keyword}' page={page} links={len(links)}")
+            item_urls.extend(links)
+
+        jitter()
+
+    # unique keep order
+    seen = set()
+    uniq = []
+    for u in item_urls:
+        if u in seen:
+            continue
+        seen.add(u)
+        uniq.append(u)
+    return uniq
 
 def main():
-    all_items = []
+    s = make_session()
+
+    results = []
+    seen_item = set()
+
     for kw in KEYWORDS:
-        seen = set()
-        collected = 0
-        for page in range(1, MAX_SEARCH_PAGES + 1):
-            q = requests.utils.quote(kw)
-            # Mercari 搜尋：keyword + page
-            #（參考：搜尋參數整理） https://jp.mercari.com/search?keyword=...
-            url = f"https://tw.mercari.com/zh-hant/search?keyword={q}&page={page}"
-            html = get(url)
-            links = parse_search_links(html)
+        item_urls = fetch_search_and_collect(s, kw)
+        print(f"[INFO] kw='{kw}' total_item_urls={len(item_urls)}")
 
-            for link in links:
-                if link in seen:
-                    continue
-                seen.add(link)
-                try:
-                    item_html = get(link)
-                    it = parse_item_page(link, item_html, kw)
-                    if it:
-                        all_items.append(it)
-                        collected += 1
-                except Exception:
-                    pass
+        for item_url in item_urls:
+            if item_url in seen_item:
+                continue
+            seen_item.add(item_url)
 
-                jitter(SLEEP_BETWEEN_ITEMS)
-                if collected >= MAX_ITEMS_PER_KEYWORD:
-                    break
+            jitter()
+            try:
+                html = get_html(s, item_url)
+            except Exception as e:
+                print(f"[ERR] item fetch: {item_url} -> {e}")
+                continue
 
-            jitter(SLEEP_BETWEEN_PAGES)
-            if collected >= MAX_ITEMS_PER_KEYWORD:
-                break
+            title = ""
+            sold = False
+            price = None
 
-    # 去重：同一個 item_url 保留最新
-    dedup = {}
-    for it in all_items:
-        dedup[it["item_url"]] = it
-    items = list(dedup.values())
+            nd = extract_next_data_json(html)
+            if nd:
+                item = parse_item_from_item_page(nd)
+                if isinstance(item, dict):
+                    title = pick_title(item)
+                    price = pick_price(item)
+                    sold = is_sold_from_fields(item)
+            # 最後用頁面文字補 sold 判斷（保險）
+            if not sold:
+                sold = has_sold_marker_text(html)
+
+            no = extract_no(title)
+            if not no:
+                continue
+            if not sold:
+                continue
+            if price is None:
+                # 有些頁面會把價格放在 meta/文字，但不在 next_data，簡單補抓
+                price = parse_price_jpy_from_any(html)
+            if price is None:
+                continue
+
+            results.append({
+                "no": no,
+                "title": title,
+                "price_jpy": int(price),
+                "item_url": item_url,
+                "keyword": kw,
+                "fetched_at": now_iso(),
+            })
+
+    # 排序：編號 -> 時間
+    results.sort(key=lambda x: (x["no"], x["fetched_at"]))
 
     out = {
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "items": items
+        "updated_at": now_iso(),
+        "count": len(results),
+        "items": results,
     }
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Wrote {OUT} with {len(items)} items")
+    print(f"[DONE] wrote {OUT} count={len(results)}")
 
 if __name__ == "__main__":
     main()
