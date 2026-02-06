@@ -1,238 +1,133 @@
-import json
-import re
-from datetime import datetime, timezone, timedelta
+import json, re, time
+from datetime import datetime, timezone
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
-
-# ========= 你指定的搜尋關鍵字（不含編號） =========
-KEYWORDS = ["ポケパークカントー ピンバッジ"]
-
-# 抓多少個商品連結去判斷 SOLD（越大越慢）
-MAX_ITEM_LINKS = 80
-
-# 搜尋頁最多往下滾幾次（越大結果越多）
-MAX_SCROLLS = 14
+import requests
+from bs4 import BeautifulSoup
 
 OUT = Path("data/sold.json")
-DBG_DIR = Path("debug")
-DBG_DIR.mkdir(parents=True, exist_ok=True)
+DBG = Path("debug")
 OUT.parent.mkdir(parents=True, exist_ok=True)
+DBG.mkdir(parents=True, exist_ok=True)
 
-SEARCH_URLS = [
-    "https://jp.mercari.com/search?keyword={q}",
-    "https://tw.mercari.com/zh-hant/search?keyword={q}",
+KEYWORDS = [
+  "ポケパークカントー ピンバッジ",
+  "pokemon park kanto pin",
 ]
 
-SOLD_HINTS = ["SOLD", "売り切れ", "販売終了", "已售出", "售出"]
+HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept-Language": "ja,en-US;q=0.9,en;q=0.8,zh-TW;q=0.7,zh;q=0.6",
+}
 
-RE_NO = re.compile(r"(?:No\.?|NO\.?|№)\s*0*([0-9]{1,3})", re.IGNORECASE)
+NO_RE = re.compile(r"(?:No\.?\s*)?0*(\d{1,3})", re.IGNORECASE)  # No. 0138 / 138
+JPY_RE = re.compile(r"¥\s*([\d,]+)")
 
-def now_taipei_iso():
-    tz = timezone(timedelta(hours=8))
-    return datetime.now(tz).isoformat(timespec="seconds")
+def now_iso():
+  return datetime.now(timezone.utc).isoformat()
 
-def normalize_space(s: str) -> str:
-    return re.sub(r"\s+", " ", (s or "")).strip()
+def fetch(url: str):
+  r = requests.get(url, headers=HEADERS, timeout=30)
+  return r.status_code, r.text
 
-def extract_no_and_name(title: str):
-    t = normalize_space(title)
-    m = RE_NO.search(t)
-    if not m:
-        return None, None
-    no = int(m.group(1))
-    after = t[m.end():].strip(" ：:・-—|()[]　")
-    name = after.split(" ")[0] if after else None
-    return no, name or None
+def parse_items_from_html(html: str):
+  """
+  這裡先用「可存活」策略：
+  - 先把所有 a[href*="/item/"] 的連結抓出來（Mercari 常見）
+  - 同時嘗試在頁面上找 price 字樣（未必有）
+  - 解析不到也沒關係，debug 會留
+  """
+  soup = BeautifulSoup(html, "html.parser")
+  links = []
+  for a in soup.select('a[href]'):
+    href = a.get("href", "")
+    if "/item/" in href:
+      links.append(href.split("?")[0])
+  # 去重
+  seen = set()
+  uniq = []
+  for h in links:
+    if h not in seen:
+      seen.add(h)
+      uniq.append(h)
 
-def parse_price(text: str):
-    t = normalize_space(text)
-    m = re.search(r"[¥￥]\s*([0-9][0-9,]*)", t)
-    if m:
-        return "JPY", int(m.group(1).replace(",", ""))
-    m = re.search(r"(?:NT\$|NT＄|NT)\s*([0-9][0-9,]*)", t, re.IGNORECASE)
-    if m:
-        return "TWD", int(m.group(1).replace(",", ""))
-    return None, None
+  return uniq
 
-def is_sold_by_text(s: str) -> bool:
-    return any(h in s for h in SOLD_HINTS)
+def extract_no_and_name_from_title(title: str):
+  # 例：ポケパーク カントー ピンバッジ No. 0138 オムナイト
+  m = re.search(r"No\.?\s*0*(\d{1,3})", title, re.IGNORECASE)
+  no = int(m.group(1)) if m else None
 
-def collect_item_links(page):
-    """
-    Mercari DOM 會變，所以用多組 selector：
-    - a[href*="/item/"]
-    - a[data-testid*="item"]（若有）
-    - 直接用 JS 拿所有 href 再過濾
-    """
-    hrefs = set()
-
-    # 1) 最穩：href 含 /item/
-    try:
-        loc = page.locator('a[href*="/item/"]')
-        for i in range(min(loc.count(), 300)):
-            h = loc.nth(i).get_attribute("href")
-            if h:
-                hrefs.add(h)
-    except Exception:
-        pass
-
-    # 2) 可能存在的 testid
-    try:
-        loc = page.locator('a[data-testid*="item"]')
-        for i in range(min(loc.count(), 300)):
-            h = loc.nth(i).get_attribute("href")
-            if h and "/item/" in h:
-                hrefs.add(h)
-    except Exception:
-        pass
-
-    # 3) 兜底：整頁 JS 拿 href
-    try:
-        all_hrefs = page.evaluate("""
-          () => Array.from(document.querySelectorAll('a'))
-            .map(a => a.getAttribute('href'))
-            .filter(Boolean)
-        """)
-        for h in all_hrefs:
-            if "/item/" in h:
-                hrefs.add(h)
-    except Exception:
-        pass
-
-    # 補全成完整 URL（以目前 page.url 的網域為主）
-    base = page.url.split("/search")[0].rstrip("/")
-    full = []
-    for h in hrefs:
-        if h.startswith("http"):
-            full.append(h)
-        else:
-            full.append(base + h)
-
-    # 去重 + 保序
-    seen = set()
-    out = []
-    for u in full:
-        if u not in seen:
-            seen.add(u)
-            out.append(u)
-    return out
-
-def dump_debug(page, tag: str):
-    """存 HTML + screenshot 到 repo/debug/"""
-    try:
-        (DBG_DIR / f"{tag}.html").write_text(page.content(), encoding="utf-8")
-    except Exception:
-        pass
-    try:
-        page.screenshot(path=str(DBG_DIR / f"{tag}.png"), full_page=True)
-    except Exception:
-        pass
+  # 粗略取最後一段當作寶可夢名（你後面可再用對照表修正）
+  name = title.strip()
+  name = re.sub(r".*No\.?\s*0*\d{1,3}\s*", "", name, flags=re.IGNORECASE).strip()
+  return no, name
 
 def main():
-    items = []
-    meta = {
-        "updated_at": now_taipei_iso(),   # 你會看到 +08:00（台灣）
-        "count": 0,
-        "items": items,
-    }
+  all_items = []
+  debug_notes = []
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-            ],
-        )
-        context = browser.new_context(
-            locale="ja-JP",
-            user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"),
-        )
-        page = context.new_page()
+  for kw in KEYWORDS:
+    q = requests.utils.quote(kw)
+    search_url = f"https://jp.mercari.com/search?keyword={q}"
+    status, html = fetch(search_url)
 
-        for kw in KEYWORDS:
-            q_enc = re.sub(r" ", "%20", kw)
-            links = []
+    # 存 debug
+    safe = re.sub(r"[^0-9A-Za-z\u3040-\u30ff\u4e00-\u9fff]+", "_", kw)[:60]
+    dbg_file = DBG / f"search_{safe}.html"
+    dbg_file.write_text(html, encoding="utf-8")
 
-            for si, tpl in enumerate(SEARCH_URLS, start=1):
-                url = tpl.format(q=q_enc)
-                try:
-                    page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                    page.wait_for_timeout(1500)
+    debug_notes.append({"keyword": kw, "url": search_url, "status": status, "debug_html": str(dbg_file)})
 
-                    # 滾動載入
-                    for _ in range(MAX_SCROLLS):
-                        page.mouse.wheel(0, 2400)
-                        page.wait_for_timeout(700)
+    # 嘗試從搜尋頁抓 item 連結（若抓不到，至少 debug 有留）
+    item_paths = parse_items_from_html(html)
 
-                    links = collect_item_links(page)
+    # 只取前 60 個避免太重
+    item_paths = item_paths[:60]
 
-                    # Debug：若抓不到任何 item link，存下來看
-                    if not links:
-                        dump_debug(page, f"search_{si}_no_links")
-                        continue
+    # 逐一抓 item 頁，抽標題/價格/是否 sold（sold 不一定能判斷，先收集）
+    for p in item_paths:
+      item_url = p if p.startswith("http") else ("https://jp.mercari.com" + p)
+      st2, html2 = fetch(item_url)
+      # 存 item debug（只存少量）
+      item_id = item_url.split("/")[-1]
+      (DBG / f"item_{item_id}.html").write_text(html2, encoding="utf-8")
 
-                    break
-                except PWTimeoutError:
-                    dump_debug(page, f"search_{si}_timeout")
-                    continue
+      s2 = BeautifulSoup(html2, "html.parser")
+      title = (s2.find("title").get_text(strip=True) if s2.find("title") else "").strip()
 
-            # 若還是 0，直接寫檔並退出（你會在 debug/ 看到頁面長怎樣）
-            if not links:
-                meta["count"] = 0
-                OUT.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-                print("No item links found. Check debug/*.png and debug/*.html")
-                browser.close()
-                return
+      # 價格抓不到就 None（很多時候 sold 價也不會顯示在靜態 HTML）
+      txt = s2.get_text(" ", strip=True)
+      pm = JPY_RE.search(txt)
+      price = int(pm.group(1).replace(",", "")) if pm else None
 
-            links = links[:MAX_ITEM_LINKS]
-            print(f"[{kw}] Collected item links: {len(links)}")
+      no, poke_name = extract_no_and_name_from_title(title or "")
+      if no is None:
+        continue
 
-            for idx, item_url in enumerate(links, start=1):
-                try:
-                    page.goto(item_url, wait_until="domcontentloaded", timeout=60000)
-                    page.wait_for_timeout(900)
+      all_items.append({
+        "no": no,
+        "pokemon_name_raw": poke_name,
+        "title": title,
+        "price_jpy": price,
+        "url": item_url,
+        "fetched_at": now_iso(),
+        "status_code": st2,
+      })
 
-                    body_text = page.inner_text("body")
-                    if not is_sold_by_text(body_text):
-                        continue
+      time.sleep(0.8)
 
-                    # title
-                    title = None
-                    try:
-                        title = page.locator("meta[property='og:title']").get_attribute("content")
-                    except Exception:
-                        pass
-                    title = normalize_space(title or page.title())
+    time.sleep(1.2)
 
-                    # price
-                    currency, amount = parse_price(body_text)
-
-                    no, name_guess = extract_no_and_name(title)
-
-                    items.append({
-                        "keyword": kw,
-                        "url": item_url,
-                        "title": title,
-                        "no": no,
-                        "pokemon_name_guess": name_guess,
-                        "currency": currency,
-                        "price": amount,
-                        "captured_at": now_taipei_iso(),
-                    })
-
-                except PWTimeoutError:
-                    continue
-                except Exception:
-                    continue
-
-        browser.close()
-
-    meta["count"] = len(items)
-    OUT.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Wrote {len(items)} items -> {OUT}")
+  # 輸出
+  payload = {
+    "updated_at": now_iso(),
+    "count": len(all_items),
+    "items": sorted(all_items, key=lambda x: (x["no"], x.get("price_jpy") or 10**12)),
+    "debug": debug_notes
+  }
+  OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+  print(json.dumps({"count": payload["count"], "debug_files": [d["debug_html"] for d in debug_notes]}, ensure_ascii=False))
 
 if __name__ == "__main__":
-    main()
+  main()
