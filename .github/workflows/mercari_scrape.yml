@@ -16,7 +16,6 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,6 +41,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/sold.json
+          git add data/sold.json debug/*
           git diff --cached --quiet || git commit -m "Update Mercari sold data"
           git push
