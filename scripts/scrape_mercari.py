@@ -1,133 +1,162 @@
-import json, re, time
+# scripts/scrape_mercari.py
+import json, re, time, random
 from datetime import datetime, timezone
 from pathlib import Path
 
-import requests
-from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 OUT = Path("data/sold.json")
-DBG = Path("debug")
+DBG_DIR = Path("debug")
 OUT.parent.mkdir(parents=True, exist_ok=True)
-DBG.mkdir(parents=True, exist_ok=True)
+DBG_DIR.mkdir(parents=True, exist_ok=True)
 
 KEYWORDS = [
-  "ポケパークカントー ピンバッジ",
-  "pokemon park kanto pin",
+    "ポケパークカントー ピンバッジ",
+    "pokemon park kanto pin",
 ]
 
-HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Accept-Language": "ja,en-US;q=0.9,en;q=0.8,zh-TW;q=0.7,zh;q=0.6",
-}
+# 你要抓的格式：標題含「No. 0138 オムナイト」這種
+RE_NO = re.compile(r"\bNo\.?\s*0*(\d{1,4})\b", re.IGNORECASE)
 
-NO_RE = re.compile(r"(?:No\.?\s*)?0*(\d{1,3})", re.IGNORECASE)  # No. 0138 / 138
-JPY_RE = re.compile(r"¥\s*([\d,]+)")
+# 常見：No. 0138 オムナイト / No.0138 オムナイト
+def parse_no_and_name(title: str):
+    m = RE_NO.search(title or "")
+    if not m:
+        return None, None
+    no = int(m.group(1))
+    # 嘗試取 No 後面第一段文字當寶可夢名（非常保守）
+    tail = title[m.end():].strip()
+    # 去掉多餘符號
+    tail = re.sub(r"^[\-\:\｜\|\／/]+", "", tail).strip()
+    # 取第一段（遇到空白/括號/【】就切）
+    name = re.split(r"[\s\(\)（）。．【】\[\]｜\|/／:：\-–—]+", tail)[0].strip()
+    if not name:
+        name = None
+    return no, name
 
 def now_iso():
-  return datetime.now(timezone.utc).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
-def fetch(url: str):
-  r = requests.get(url, headers=HEADERS, timeout=30)
-  return r.status_code, r.text
+def safe_filename(s: str):
+    s = s.strip().replace(" ", "_")
+    s = re.sub(r"[^\w\u3000-\u30ff\u4e00-\u9fff\-\_]+", "_", s)
+    return s[:120] or "debug"
 
-def parse_items_from_html(html: str):
-  """
-  這裡先用「可存活」策略：
-  - 先把所有 a[href*="/item/"] 的連結抓出來（Mercari 常見）
-  - 同時嘗試在頁面上找 price 字樣（未必有）
-  - 解析不到也沒關係，debug 會留
-  """
-  soup = BeautifulSoup(html, "html.parser")
-  links = []
-  for a in soup.select('a[href]'):
-    href = a.get("href", "")
-    if "/item/" in href:
-      links.append(href.split("?")[0])
-  # 去重
-  seen = set()
-  uniq = []
-  for h in links:
-    if h not in seen:
-      seen.add(h)
-      uniq.append(h)
+def scrape_one_keyword(page, keyword: str):
+    # Mercari JP 搜尋（注意：Mercari 參數可能會變，先用最穩的 keyword）
+    url = "https://jp.mercari.com/search?keyword=" + __import__("urllib.parse").parse.quote(keyword)
+    page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
-  return uniq
+    # 讓 JS 有時間把卡片渲染出來（保守做法：等一下+嘗試等待某些元素）
+    page.wait_for_timeout(2500)
 
-def extract_no_and_name_from_title(title: str):
-  # 例：ポケパーク カントー ピンバッジ No. 0138 オムナイト
-  m = re.search(r"No\.?\s*0*(\d{1,3})", title, re.IGNORECASE)
-  no = int(m.group(1)) if m else None
+    # 滾動幾次載入更多
+    for _ in range(3):
+        page.mouse.wheel(0, 1200)
+        page.wait_for_timeout(1200)
 
-  # 粗略取最後一段當作寶可夢名（你後面可再用對照表修正）
-  name = title.strip()
-  name = re.sub(r".*No\.?\s*0*\d{1,3}\s*", "", name, flags=re.IGNORECASE).strip()
-  return no, name
+    html = page.content()
+    dbg_path = DBG_DIR / f"search_{safe_filename(keyword)}.html"
+    dbg_path.write_text(html, encoding="utf-8")
+
+    items = []
+
+    # 嘗試抓商品卡片連結（多種 selector fallback）
+    # Mercari 版型會變，所以這裡做「盡量抓到 href 像 /item/… 的連結」
+    links = page.locator('a[href^="/item/"]').all()
+    seen = set()
+
+    for a in links:
+        try:
+            href = a.get_attribute("href") or ""
+            if not href.startswith("/item/"):
+                continue
+            if href in seen:
+                continue
+            seen.add(href)
+
+            # 嘗試從卡片附近拿 title/price（向上找最近可見文字）
+            # 這段是保守抓法：拿 a 的 inner_text + 父層 text
+            title = (a.inner_text() or "").strip()
+            container_text = (a.locator("xpath=ancestor::*[1]").inner_text() or "").strip()
+            blob = (title + "\n" + container_text).strip()
+
+            # 先從 blob 裡找像「¥12,345」的價格
+            m_price = re.search(r"¥\s*([\d,]+)", blob)
+            price = int(m_price.group(1).replace(",", "")) if m_price else None
+
+            # 如果還是沒價錢，再往上找大一層
+            if price is None:
+                up = a.locator("xpath=ancestor::*[2]")
+                blob2 = (up.inner_text() or "").strip()
+                m_price = re.search(r"¥\s*([\d,]+)", blob2)
+                price = int(m_price.group(1).replace(",", "")) if m_price else None
+                if not title:
+                    title = blob2.split("\n")[0].strip()
+
+            # 最少要有標題與價格才收
+            if not title:
+                continue
+            if price is None:
+                continue
+
+            no, pname = parse_no_and_name(title)
+            # 你要的是「有標示 151 編號 + 寶可夢名」的賣場：沒 No 的就略過
+            if not no:
+                continue
+
+            item_url = "https://jp.mercari.com" + href
+
+            items.append({
+                "keyword": keyword,
+                "title": title,
+                "price_jpy": price,
+                "sold_at": now_iso(),   # 這裡先用抓取時間（要更精準需進 item 頁抓售出時間）
+                "item_url": item_url,
+                "no": no,
+                "pokemon_name": pname or "",
+            })
+
+        except Exception:
+            continue
+
+    return {
+        "keyword": keyword,
+        "url": url,
+        "status": 200,
+        "debug_html": str(dbg_path),
+        "found": len(items),
+        "items": items,
+    }
 
 def main():
-  all_items = []
-  debug_notes = []
+    all_items = []
+    debug = []
 
-  for kw in KEYWORDS:
-    q = requests.utils.quote(kw)
-    search_url = f"https://jp.mercari.com/search?keyword={q}"
-    status, html = fetch(search_url)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        # 假裝正常瀏覽器
+        page.set_extra_http_headers({
+            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+        })
 
-    # 存 debug
-    safe = re.sub(r"[^0-9A-Za-z\u3040-\u30ff\u4e00-\u9fff]+", "_", kw)[:60]
-    dbg_file = DBG / f"search_{safe}.html"
-    dbg_file.write_text(html, encoding="utf-8")
+        for kw in KEYWORDS:
+            # 低頻率 + 隨機延遲
+            time.sleep(random.uniform(1.2, 2.4))
+            r = scrape_one_keyword(page, kw)
+            debug.append({k: r[k] for k in ["keyword","url","status","debug_html","found"]})
+            all_items.extend(r["items"])
 
-    debug_notes.append({"keyword": kw, "url": search_url, "status": status, "debug_html": str(dbg_file)})
+        browser.close()
 
-    # 嘗試從搜尋頁抓 item 連結（若抓不到，至少 debug 有留）
-    item_paths = parse_items_from_html(html)
-
-    # 只取前 60 個避免太重
-    item_paths = item_paths[:60]
-
-    # 逐一抓 item 頁，抽標題/價格/是否 sold（sold 不一定能判斷，先收集）
-    for p in item_paths:
-      item_url = p if p.startswith("http") else ("https://jp.mercari.com" + p)
-      st2, html2 = fetch(item_url)
-      # 存 item debug（只存少量）
-      item_id = item_url.split("/")[-1]
-      (DBG / f"item_{item_id}.html").write_text(html2, encoding="utf-8")
-
-      s2 = BeautifulSoup(html2, "html.parser")
-      title = (s2.find("title").get_text(strip=True) if s2.find("title") else "").strip()
-
-      # 價格抓不到就 None（很多時候 sold 價也不會顯示在靜態 HTML）
-      txt = s2.get_text(" ", strip=True)
-      pm = JPY_RE.search(txt)
-      price = int(pm.group(1).replace(",", "")) if pm else None
-
-      no, poke_name = extract_no_and_name_from_title(title or "")
-      if no is None:
-        continue
-
-      all_items.append({
-        "no": no,
-        "pokemon_name_raw": poke_name,
-        "title": title,
-        "price_jpy": price,
-        "url": item_url,
-        "fetched_at": now_iso(),
-        "status_code": st2,
-      })
-
-      time.sleep(0.8)
-
-    time.sleep(1.2)
-
-  # 輸出
-  payload = {
-    "updated_at": now_iso(),
-    "count": len(all_items),
-    "items": sorted(all_items, key=lambda x: (x["no"], x.get("price_jpy") or 10**12)),
-    "debug": debug_notes
-  }
-  OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-  print(json.dumps({"count": payload["count"], "debug_files": [d["debug_html"] for d in debug_notes]}, ensure_ascii=False))
+    payload = {
+        "updated_at": now_iso(),
+        "count": len(all_items),
+        "items": all_items,
+        "debug": debug,
+    }
+    OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 if __name__ == "__main__":
-  main()
+    main()
