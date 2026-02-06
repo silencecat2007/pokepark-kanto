@@ -3,637 +3,271 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PokéPark KANTO 徽章圖鑑（#001–#151）</title>
+  <title>PokéPark KANTO Pins 漲跌幅追蹤（Mercari）</title>
   <style>
-    :root{
-      --bg:#0b0d12;--card:#121624;--muted:#8b94aa;--text:#e9ecf5;--line:#232a3d;--chip:#1b2235;--accent:#7aa2ff;
-      --good:#34d399;--warn:#fbbf24;
-    }
+    :root{--bg:#0b0d12;--card:#121624;--muted:#8b94aa;--text:#e9ecf5;--line:#232a3d;--chip:#1b2235;--accent:#7aa2ff}
     *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
-      background:linear-gradient(180deg,#0b0d12,#0b0d12 40%,#0e1220);
-      color:var(--text)
-    }
-    a{color:inherit}
-    .wrap{max-width:1260px;margin:0 auto;padding:20px}
-    header{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}
-    .title{display:flex;gap:12px;align-items:center}
-    .badge{
-      width:44px;height:44px;border-radius:14px;
-      background:radial-gradient(circle at 30% 30%,#fff2,#0000),linear-gradient(135deg,#2b3555,#141a2c);
-      border:1px solid var(--line);display:grid;place-items:center;box-shadow:0 10px 30px #0006
-    }
-    .badge span{font-size:22px}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;background:linear-gradient(180deg,#0b0d12,#0b0d12 40%,#0e1220);color:var(--text)}
+    .wrap{max-width:1200px;margin:0 auto;padding:20px}
+    header{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}
     h1{font-size:18px;margin:0}
-    .sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .sub{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6}
     .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    input[type="search"],select,button{
+    input,select,button{
       background:var(--card);border:1px solid var(--line);color:var(--text);
       border-radius:12px;padding:10px 12px;font-size:14px;outline:none
     }
-    input[type="search"]{min-width:280px}
-    button{cursor:pointer;transition:.15s transform,.15s filter}
-    button:hover{filter:brightness(1.06)}
-    button:active{transform:translateY(1px)}
-    .chips{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .chip{
-      background:var(--chip);border:1px solid var(--line);color:var(--muted);
-      padding:7px 10px;border-radius:999px;font-size:12px;display:flex;gap:8px;align-items:center
-    }
-    .chip strong{color:var(--text);font-weight:600}
-
-    .grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px;margin-top:14px}
-    @media (max-width:1200px){.grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
-    @media (max-width:1020px){.grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
-    @media (max-width:860px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-    @media (max-width:680px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-    @media (max-width:460px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-
-    .card{
-      background:linear-gradient(180deg,#121624,#0f1320);
-      border:1px solid var(--line);
-      border-radius:16px;
-      overflow:hidden;
-      position:relative;
-      cursor:pointer;
-    }
-    .card .top{display:flex;align-items:center;justify-content:space-between;padding:10px 10px 6px 10px}
+    button{cursor:pointer}
+    .chips{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+    .chip{background:var(--chip);border:1px solid var(--line);color:var(--muted);padding:7px 10px;border-radius:999px;font-size:12px}
+    .chip strong{color:var(--text)}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}
+    @media (max-width:1100px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+    @media (max-width:760px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media (max-width:520px){.grid{grid-template-columns:repeat(1,minmax(0,1fr))}}
+    .card{background:linear-gradient(180deg,#121624,#0f1320);border:1px solid var(--line);border-radius:16px;padding:12px}
+    .row{display:flex;justify-content:space-between;gap:10px;align-items:flex-end}
     .num{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}
-    .name{font-size:13px;font-weight:700;line-height:1.15;max-width:100%}
-    .mini{font-size:12px;color:var(--muted);margin-top:2px}
-
-    /* Preview image area */
-    .thumb{
-      width:100%;
-      aspect-ratio:1/1;
-      background:radial-gradient(circle at 30% 30%,#ffffff10,#0000),linear-gradient(135deg,#1c2440,#12162a);
-      display:grid;place-items:center;position:relative;
-    }
-    .thumb a{display:block;width:100%;height:100%}
-    .thumb img{
-      width:100%;height:100%;
-      object-fit:contain;
-      display:block;
-      background:#0b1220;
-      transition:transform .18s ease, box-shadow .18s ease, filter .18s ease;
-    }
-    .thumb a:hover img{
-      transform:scale(1.02);
-      box-shadow:0 0 0 1px rgba(122,162,255,.55) inset;
-      filter:brightness(1.02);
-    }
-    .thumb .placeholder{
-      padding:10px;text-align:center;color:var(--muted);font-size:12px;line-height:1.45
-    }
-
-    .foot{
-      display:flex;gap:8px;align-items:center;justify-content:space-between;
-      padding:10px;border-top:1px solid var(--line)
-    }
-    .src{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62%}
-    .pill{
-      font-size:11px;background:#1c2743;border:1px solid #2a3960;color:#cfe0ff;
-      padding:5px 8px;border-radius:999px
-    }
-    .pill.good{background:#10261d;border-color:#1f6b4a;color:#baf7dc}
-    .pill.warn{background:#2a220f;border-color:#6b561f;color:#ffe7b0}
-
-    .star{
-      position:absolute;top:10px;left:10px;background:#1a2340;border:1px solid #2a3960;border-radius:999px;
-      padding:5px 8px;font-size:11px;color:#cfe0ff;display:none
-    }
-    .card[data-special="true"] .star{display:inline-flex}
-
-    dialog{
-      border:none;border-radius:18px;background:linear-gradient(180deg,#121624,#0f1320);
-      color:var(--text);max-width:920px;width:calc(100% - 24px);
-      box-shadow:0 30px 80px #000a;padding:0;overflow:hidden
-    }
-    dialog::backdrop{background:#000a}
-    .modalHead{display:flex;justify-content:space-between;align-items:center;padding:14px 14px 10px;border-bottom:1px solid var(--line)}
-    .modalHead .left{display:flex;gap:10px;align-items:center}
-    .modalHead .left .n{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}
-    .modalHead .left .t{font-size:16px;font-weight:800}
-    .modalBody{display:grid;grid-template-columns:1.1fr .9fr;gap:0}
-    @media (max-width:920px){.modalBody{grid-template-columns:1fr}}
-    .modalImg{background:#0b0d12}
-    .modalImg img{width:100%;height:100%;object-fit:contain;max-height:72vh;display:block;background:#0b1220}
-    .modalInfo{padding:14px;border-left:1px solid var(--line)}
-    @media (max-width:920px){.modalInfo{border-left:none;border-top:1px solid var(--line)}}
-    .row{padding:10px 0;border-bottom:1px solid var(--line)}
-    .k{font-size:12px;color:var(--muted)}
-    .v{margin-top:6px;font-size:14px;line-height:1.45;word-break:break-word}
-    .v input,.v textarea{
-      width:100%;
-      background:var(--card);border:1px solid var(--line);color:var(--text);
-      border-radius:12px;padding:10px 12px;font-size:13px;outline:none
-    }
-    .v textarea{resize:vertical}
-    .modalBtns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
-    .toast{
-      position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
-      background:#121624;border:1px solid var(--line);border-radius:14px;padding:10px 12px;
-      font-size:13px;color:var(--text);box-shadow:0 20px 60px #000a;
-      opacity:0;pointer-events:none;transition:.18s opacity,.18s transform
-    }
-    .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
-    .hintbox{
-      margin-top:12px;
-      background:linear-gradient(180deg,#121624,#0f1320);
-      border:1px solid var(--line);
-      border-radius:16px;
-      padding:12px 14px;
-      color:var(--muted);
-      font-size:12px;
-      line-height:1.6;
-    }
-    .hintbox strong{color:var(--text)}
-    .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:#0b0d12;border:1px solid var(--line);padding:1px 6px;border-radius:8px;color:var(--text)}
+    .name{font-size:14px;font-weight:750}
+    .k{color:var(--muted);font-size:12px;margin-top:10px}
+    .v{font-size:14px;margin-top:6px}
+    .delta{font-variant-numeric:tabular-nums;font-size:13px}
+    .delta.up{color:#7CFFB2}
+    .delta.down{color:#FF7C7C}
+    .delta.flat{color:#C7D2FE}
+    .links{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+    a.pill{display:inline-flex;gap:8px;align-items:center;text-decoration:none;background:#1c2743;border:1px solid #2a3960;color:#cfe0ff;padding:6px 8px;border-radius:999px;font-size:12px}
+    .chartWrap{margin-top:10px;background:#0b0d12;border:1px solid var(--line);border-radius:12px;padding:10px}
+    canvas{width:100%;height:220px}
+    .footer{margin-top:16px;color:var(--muted);font-size:12px;line-height:1.6}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <div class="title">
-        <div class="badge" aria-hidden="true"><span>⚪️</span></div>
-        <div>
-          <h1>PokéPark KANTO 徽章圖鑑</h1>
-          <div class="sub">#001–#151｜直接顯示預覽圖｜點圖開真實品項連結（你貼哪個就開哪個）</div>
+      <div>
+        <h1>PokéPark KANTO Pins 漲跌幅追蹤（Mercari Sold）</h1>
+        <div class="sub">
+          自動抓取 Mercari「已售出」且標題含 <span class="mono">No. ####</span> + 寶可夢名稱 的刊登，彙整成交價（JPY）。<br/>
+          你可切換關鍵字：<span class="mono">pokemon park kanto pin</span> / <span class="mono">ポケパークカントー ピンズ ピンバッチ</span>
         </div>
+        <div class="chips" id="stats"></div>
       </div>
+
       <div class="bar">
-        <input id="q" type="search" placeholder="搜尋：編號 / 名稱（繁中）" />
-        <select id="filter">
-          <option value="all">顯示：全部</option>
-          <option value="hasImage">只看：有預覽圖</option>
-          <option value="noImage">只看：缺預覽圖</option>
-          <option value="hasLink">只看：有真實連結</option>
-          <option value="mewtwo">只看：#150 超夢</option>
+        <select id="kw">
+          <option value="pokemon park kanto pin">pokemon park kanto pin</option>
+          <option value="ポケパークカントー ピンズ ピンバッチ">ポケパークカントー ピンズ ピンバッチ</option>
         </select>
-        <button id="btnExport">匯出 JSON（備份）</button>
-        <button id="btnImport">匯入 JSON（還原）</button>
-        <button id="btnReset">重置（清空本機資料）</button>
-        <input id="jsonPicker" type="file" accept="application/json" hidden />
+        <select id="sort">
+          <option value="delta">排序：漲跌幅</option>
+          <option value="latest">排序：最新成交</option>
+          <option value="median7">排序：7日中位數</option>
+          <option value="count7">排序：7日筆數</option>
+          <option value="id">排序：編號</option>
+        </select>
+        <input id="q" placeholder="搜尋：編號/名稱（例 150 或 ミュウツー）" />
+        <button id="btnReload">重新載入資料</button>
       </div>
     </header>
 
-    <div class="chips" id="stats"></div>
-
-    <div class="hintbox">
-      <div><strong>你要做的只有一件事：</strong>點任一張卡片 → 在彈窗貼上「圖片直連（image URL）」與「真實品項連結（item URL）」→ 立刻預覽並可點。</div>
-      <div>※ 圖片直連要能直接開出圖片檔（常見結尾：.jpg / .png / .webp）。如果平台會擋 hotlink，就改用你自己上傳到 GitHub（或其他圖床）的直連。</div>
-      <div>快捷鍵：在卡片上按 <span class="kbd">S</span> 可開啟該編號的搜尋（Google 圖片）。</div>
-    </div>
-
     <main class="grid" id="grid"></main>
+
+    <div class="footer">
+      資料來源：Mercari 公開頁面（以低頻率擷取）。若遇到平台反爬導致更新失敗，Actions 會顯示錯誤紀錄。<br/>
+      提醒：這是「成交價追蹤工具」，不顯示任何你不想看的價格之外資訊也可；如要忽略某些條件可在 scraper 內調整。
+    </div>
   </div>
 
-  <dialog id="modal">
-    <div class="modalHead">
-      <div class="left">
-        <div>
-          <div class="n" id="mNum"></div>
-          <div class="t" id="mTitle"></div>
-        </div>
-      </div>
-      <button id="mClose">關閉</button>
-    </div>
-    <div class="modalBody">
-      <div class="modalImg" id="mImg"></div>
-      <div class="modalInfo">
-        <div class="row">
-          <div class="k">官方繁體中文名稱</div>
-          <div class="v" id="mZh"></div>
-        </div>
+<script>
+  const ZH = ["",
+    "妙蛙種子","妙蛙草","妙蛙花","小火龍","火恐龍","噴火龍","傑尼龜","卡咪龜","水箭龜",
+    "綠毛蟲","鐵甲蛹","巴大蝶","獨角蟲","鐵殼蛹","大針蜂","波波","比比鳥","大比鳥",
+    "小拉達","拉達","烈雀","大嘴雀","阿柏蛇","阿柏怪","皮卡丘","雷丘","穿山鼠","穿山王",
+    "尼多蘭","尼多娜","尼多后","尼多朗","尼多力諾","尼多王","皮皮","皮可西","六尾","九尾",
+    "胖丁","胖可丁","超音蝠","大嘴蝠","走路草","臭臭花","霸王花","派拉斯","派拉斯特","毛球",
+    "摩魯蛾","地鼠","三地鼠","喵喵","貓老大","可達鴨","哥達鴨","猴怪","火爆猴","卡蒂狗",
+    "風速狗","蚊香蝌蚪","蚊香君","蚊香泳士","凱西","勇基拉","胡地","腕力","豪力","怪力",
+    "喇叭芽","口呆花","大食花","瑪瑙水母","毒刺水母","小拳石","隆隆石","隆隆岩","小火馬","烈焰馬",
+    "呆呆獸","呆殼獸","小磁怪","三合一磁怪","大蔥鴨","嘟嘟","嘟嘟利","小海獅","白海獅","臭泥",
+    "臭臭泥","大舌貝","刺甲貝","鬼斯","鬼斯通","耿鬼","大岩蛇","催眠貘","引夢貘人","大鉗蟹",
+    "巨鉗蟹","霹靂電球","頑皮雷彈","蛋蛋","椰蛋樹","卡拉卡拉","嘎啦嘎啦","飛腿郎","快拳郎","大舌頭",
+    "瓦斯彈","雙彈瓦斯","獨角犀牛","鑽角犀獸","吉利蛋","蔓藤怪","袋獸","墨海馬","海刺龍","角金魚",
+    "金魚王","海星星","寶石海星","魔牆人偶","飛天螳螂","迷唇姐","電擊獸","鴨嘴火獸","凱羅斯","肯泰羅",
+    "鯉魚王","暴鯉龍","拉普拉斯","百變怪","伊布","水伊布","雷伊布","火伊布","多邊獸","菊石獸",
+    "多刺菊石獸","化石盔","鐮刀盔","化石翼龍","卡比獸","急凍鳥","閃電鳥","火焰鳥","迷你龍","哈克龍",
+    "快龍","超夢","夢幻"
+  ];
+  const pad3 = n => String(n).padStart(3,"0");
 
-        <div class="row">
-          <div class="k">圖片預覽（Image URL：圖片直連）</div>
-          <div class="v">
-            <input id="mImage" placeholder="貼上圖片直連（例如 https://.../150.jpg ）" />
-          </div>
-        </div>
+  // data/sold.json 由 Actions 產生：{ updated_at, keyword, items:[{id,title,price_jpy,sold_at,item_url,no,pokemon_name}] }
+  let RAW = null;
+  const charts = new Map();
 
-        <div class="row">
-          <div class="k">真實品項連結（Item URL：Mercari / Yahoo / X / IG / 官方）</div>
-          <div class="v">
-            <input id="mLink" placeholder="貼上真實品項/貼文連結（點預覽圖會開這個）" />
-          </div>
-          <div class="modalBtns">
-            <button id="btnOpenItem">開啟真實連結</button>
-            <button id="btnSearch">開啟搜尋（Google 圖片）</button>
-          </div>
-        </div>
+  function median(arr){
+    if(!arr.length) return null;
+    const a=[...arr].sort((x,y)=>x-y);
+    const mid=Math.floor(a.length/2);
+    return a.length%2? a[mid] : (a[mid-1]+a[mid])/2;
+  }
 
-        <div class="row">
-          <div class="k">來源備註（可選）</div>
-          <div class="v">
-            <textarea id="mNote" rows="3" placeholder="例如：Mercari 賣家/刊登日期、X 帳號、你自留備註…"></textarea>
-          </div>
-        </div>
+  function pct(now, prev){
+    if(prev==null || prev===0 || now==null) return null;
+    return ((now-prev)/prev)*100;
+  }
 
-        <div class="modalBtns">
-          <button id="btnSave">儲存</button>
-          <button id="btnClear">清除這格的圖與連結</button>
-          <button id="btnMarkOk">標記：已確認實物</button>
-        </div>
+  function fmtJPY(n){
+    if(n==null) return "—";
+    return "¥" + Math.round(n).toLocaleString("ja-JP");
+  }
 
-        <div class="sub" style="margin-top:10px">儲存後資料會存在你瀏覽器本機（localStorage）。要跨裝置請用「匯出/匯入 JSON」。</div>
-      </div>
-    </div>
-  </dialog>
+  function deltaClass(v){
+    if(v==null) return "flat";
+    if(v>0.0001) return "up";
+    if(v<-0.0001) return "down";
+    return "flat";
+  }
 
-  <div class="toast" id="toast">已儲存</div>
+  function buildStats(all){
+    const total = all.length;
+    const uniq = new Set(all.map(x=>x.no)).size;
+    const updated = RAW?.updated_at ? new Date(RAW.updated_at).toLocaleString() : "—";
+    const el=document.getElementById("stats");
+    el.innerHTML = `
+      <span class="chip">資料筆數 <strong>${total}</strong></span>
+      <span class="chip">覆蓋編號 <strong>${uniq}/151</strong></span>
+      <span class="chip">更新時間 <strong>${updated}</strong></span>
+    `;
+  }
 
-  <script>
-    // Data model per entry:
-    // { id, zh, image, link, note, verified, searchUrl }
-    const KEY = "pokepark_kanto_badges_v2";
+  function groupByNo(items){
+    const m=new Map();
+    for(const it of items){
+      if(!it.no) continue;
+      if(!m.has(it.no)) m.set(it.no, []);
+      m.get(it.no).push(it);
+    }
+    // sort each group by sold_at asc
+    for(const [k,v] of m){
+      v.sort((a,b)=>new Date(a.sold_at)-new Date(b.sold_at));
+    }
+    return m;
+  }
 
-    const ZH = [
-      "",
-      "妙蛙種子","妙蛙草","妙蛙花","小火龍","火恐龍","噴火龍","傑尼龜","卡咪龜","水箭龜",
-      "綠毛蟲","鐵甲蛹","巴大蝶","獨角蟲","鐵殼蛹","大針蜂","波波","比比鳥","大比鳥",
-      "小拉達","拉達","烈雀","大嘴雀","阿柏蛇","阿柏怪","皮卡丘","雷丘","穿山鼠","穿山王",
-      "尼多蘭","尼多娜","尼多后","尼多朗","尼多力諾","尼多王","皮皮","皮可西","六尾","九尾",
-      "胖丁","胖可丁","超音蝠","大嘴蝠","走路草","臭臭花","霸王花","派拉斯","派拉斯特","毛球",
-      "摩魯蛾","地鼠","三地鼠","喵喵","貓老大","可達鴨","哥達鴨","猴怪","火爆猴","卡蒂狗",
-      "風速狗","蚊香蝌蚪","蚊香君","蚊香泳士","凱西","勇基拉","胡地","腕力","豪力","怪力",
-      "喇叭芽","口呆花","大食花","瑪瑙水母","毒刺水母","小拳石","隆隆石","隆隆岩","小火馬","烈焰馬",
-      "呆呆獸","呆殼獸","小磁怪","三合一磁怪","大蔥鴨","嘟嘟","嘟嘟利","小海獅","白海獅","臭泥",
-      "臭臭泥","大舌貝","刺甲貝","鬼斯","鬼斯通","耿鬼","大岩蛇","催眠貘","引夢貘人","大鉗蟹",
-      "巨鉗蟹","霹靂電球","頑皮雷彈","蛋蛋","椰蛋樹","卡拉卡拉","嘎啦嘎啦","飛腿郎","快拳郎","大舌頭",
-      "瓦斯彈","雙彈瓦斯","獨角犀牛","鑽角犀獸","吉利蛋","蔓藤怪","袋獸","墨海馬","海刺龍","角金魚",
-      "金魚王","海星星","寶石海星","魔牆人偶","飛天螳螂","迷唇姐","電擊獸","鴨嘴火獸","凱羅斯","肯泰羅",
-      "鯉魚王","暴鯉龍","拉普拉斯","百變怪","伊布","水伊布","雷伊布","火伊布","多邊獸","菊石獸",
-      "多刺菊石獸","化石盔","鐮刀盔","化石翼龍","卡比獸","急凍鳥","閃電鳥","火焰鳥","迷你龍","哈克龍",
-      "快龍","超夢","夢幻"
-    ];
+  function render(){
+    const kw=document.getElementById("kw").value;
+    const q=document.getElementById("q").value.trim().toLowerCase();
+    const sort=document.getElementById("sort").value;
 
-    const pad3 = n => String(n).padStart(3,'0');
+    const items = (RAW?.items||[]).filter(x=>x.keyword===kw);
+    buildStats(items);
 
-    function mkSearchUrl(id, zh){
-      const kwMewtwo = (id===150) ? " ミュウツー" : "";
-      const q = encodeURIComponent(`ポケパークカントー ピンズ ${pad3(id)}${kwMewtwo} ${zh||""}`.trim());
-      return `https://www.google.com/search?tbm=isch&q=${q}`;
+    const byNo = groupByNo(items);
+    const rows = [];
+    for(let no=1;no<=151;no++){
+      const g = byNo.get(no) || [];
+      const name = g[g.length-1]?.pokemon_name || "";
+      const zh = ZH[no] || "";
+      const latest = g.length ? g[g.length-1].price_jpy : null;
+
+      const now = new Date();
+      const cutoff7 = new Date(now.getTime()-7*24*3600*1000);
+      const g7 = g.filter(x=>new Date(x.sold_at) >= cutoff7);
+      const prices7 = g7.map(x=>x.price_jpy).filter(x=>typeof x==="number");
+      const med7 = prices7.length ? median(prices7) : null;
+
+      const prev = g.length>=2 ? g[g.length-2].price_jpy : null;
+      const d = pct(latest, prev);
+
+      rows.push({no, name, zh, latest, prev, delta:d, med7, count7:prices7.length, g});
     }
 
-    function seed(){
-      const arr=[];
-      for(let i=1;i<=151;i++){
-        arr.push({
-          id:i,
-          zh: ZH[i] || "",
-          image:"",   // image direct URL (preview)
-          link:"",    // item link (opens on click)
-          note: i===150 ? "#150 超夢：優先追蹤" : "",
-          verified:false,
-          searchUrl: mkSearchUrl(i, ZH[i]||"")
-        });
-      }
-      return arr;
-    }
-
-    function load(){
-      try{
-        const raw = localStorage.getItem(KEY);
-        if(!raw) return seed();
-        const data = JSON.parse(raw);
-        if(!Array.isArray(data) || data.length!==151) return seed();
-        // Normalize & keep searchUrl up-to-date
-        return data.map((x,i)=>({
-          id: x.id ?? (i+1),
-          zh: x.zh || (ZH[i+1]||""),
-          image: x.image || "",
-          link: x.link || "",
-          note: x.note || "",
-          verified: !!x.verified,
-          searchUrl: mkSearchUrl((x.id ?? (i+1)), x.zh || (ZH[i+1]||""))
-        })).sort((a,b)=>a.id-b.id);
-      }catch{
-        return seed();
-      }
-    }
-
-    function save(){
-      localStorage.setItem(KEY, JSON.stringify(state.data));
-      toast("已儲存 ✅");
-      renderStats();
-    }
-
-    function toast(msg){
-      const t=document.getElementById('toast');
-      t.textContent=msg;
-      t.classList.add('show');
-      setTimeout(()=>t.classList.remove('show'),1100);
-    }
-
-    const state = {
-      data: load(),
-      q:"",
-      filter:"all",
-      activeId:null
-    };
-
-    const grid = document.getElementById('grid');
-    const stats = document.getElementById('stats');
-
-    function matches(e,q){
+    let filtered = rows.filter(r=>{
       if(!q) return true;
-      const s = (`${pad3(e.id)} ${e.zh}`).toLowerCase();
-      return s.includes(q.toLowerCase());
-    }
+      return (pad3(r.no)+" "+r.name+" "+r.zh).toLowerCase().includes(q);
+    });
 
-    function applyFilter(list){
-      switch(state.filter){
-        case "hasImage": return list.filter(x=>!!x.image);
-        case "noImage": return list.filter(x=>!x.image);
-        case "hasLink": return list.filter(x=>!!x.link);
-        case "mewtwo": return list.filter(x=>x.id===150);
-        default: return list;
-      }
-    }
+    const sorter = {
+      delta: (a,b)=>(b.delta??-1e9)-(a.delta??-1e9),
+      latest:(a,b)=>(b.latest??-1e9)-(a.latest??-1e9),
+      median7:(a,b)=>(b.med7??-1e9)-(a.med7??-1e9),
+      count7:(a,b)=>(b.count7)-(a.count7),
+      id:(a,b)=>(a.no-b.no),
+    }[sort] || ((a,b)=>a.no-b.no);
 
-    function renderStats(){
-      const total = state.data.length;
-      const withImg = state.data.filter(x=>!!x.image).length;
-      const withLink = state.data.filter(x=>!!x.link).length;
-      const verified = state.data.filter(x=>x.verified).length;
-      const mew = state.data.find(x=>x.id===150);
-      stats.innerHTML="";
-      const chips = [
-        ["總數", total],
-        ["有預覽圖", withImg],
-        ["有真實連結", withLink],
-        ["已確認", verified],
-        ["#150 超夢", (mew?.image ? "有圖" : "缺圖") + (mew?.link ? "・有連結" : "・缺連結")]
-      ];
-      for(const [k,v] of chips){
-        const el=document.createElement('div');
-        el.className='chip';
-        el.innerHTML=`<span>${k}</span><strong>${v}</strong>`;
-        stats.appendChild(el);
-      }
-    }
+    filtered.sort(sorter);
 
-    function render(){
-      const q = state.q.trim();
-      let list = state.data.filter(e=>matches(e,q));
-      list = applyFilter(list);
+    const grid=document.getElementById("grid");
+    grid.innerHTML="";
+    charts.clear();
 
-      // Put #150 first visually (priority)
-      list.sort((a,b)=>{
-        if(a.id===150) return -1;
-        if(b.id===150) return 1;
-        return a.id-b.id;
+    for(const r of filtered){
+      const card=document.createElement("div");
+      card.className="card";
+      const id = pad3(r.no);
+      const deltaText = r.delta==null ? "—" : (r.delta>0?`+${r.delta.toFixed(1)}%`:`${r.delta.toFixed(1)}%`);
+      const cls = deltaClass(r.delta);
+
+      const lastLink = r.g.length ? r.g[r.g.length-1].item_url : "";
+      const mercariSearch = `https://jp.mercari.com/search?keyword=${encodeURIComponent("ポケパークカントー ピンバッジ No. "+id+" "+(r.name||""))}`;
+
+      card.innerHTML = `
+        <div class="row">
+          <div>
+            <div class="num">#${id}</div>
+            <div class="name">${r.name || "（未抓到）"} <span style="color:var(--muted);font-weight:600">／${r.zh}</span></div>
+          </div>
+          <div class="delta ${cls}">${deltaText}</div>
+        </div>
+
+        <div class="k">最新成交</div>
+        <div class="v">${fmtJPY(r.latest)} <span style="color:var(--muted);font-size:12px">（前一筆：${fmtJPY(r.prev)}）</span></div>
+
+        <div class="k">7 日中位數 / 7 日筆數</div>
+        <div class="v">${fmtJPY(r.med7)} <span style="color:var(--muted);font-size:12px">／${r.count7}</span></div>
+
+        <div class="chartWrap"><canvas id="c_${id}"></canvas></div>
+
+        <div class="links">
+          ${lastLink ? `<a class="pill" href="${lastLink}" target="_blank" rel="noopener">最新成交頁</a>` : ``}
+          <a class="pill" href="${mercariSearch}" target="_blank" rel="noopener">Mercari 搜尋（No.${id}）</a>
+        </div>
+      `;
+      grid.appendChild(card);
+
+      // chart
+      const labels = r.g.map(x=>new Date(x.sold_at).toLocaleDateString());
+      const data = r.g.map(x=>x.price_jpy);
+      const ctx = card.querySelector(`#c_${id}`);
+      new Chart(ctx, {
+        type: "line",
+        data: { labels, datasets: [{ label: `#${id}`, data, borderWidth: 2, pointRadius: 2 }] },
+        options: {
+          responsive:true,
+          maintainAspectRatio:false,
+          scales:{ y:{ ticks:{ callback:(v)=>"¥"+Number(v).toLocaleString("ja-JP") } } },
+          plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:(c)=>fmtJPY(c.parsed.y) } } }
+        }
       });
-
-      grid.innerHTML="";
-      for(const e of list){
-        const card=document.createElement('div');
-        card.className='card';
-        if(e.id===150) card.dataset.special="true";
-        card.tabIndex=0;
-
-        const hasImg = !!e.image;
-        const hasLink = !!e.link;
-
-        card.innerHTML = `
-          <div class="star">優先追蹤 #150</div>
-          <div class="top">
-            <div>
-              <div class="num">#${pad3(e.id)}</div>
-              <div class="name">${escapeHtml(e.zh||"（待填）")}</div>
-              <div class="mini">${escapeHtml(e.note||"")}</div>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-              ${e.verified?'<span class="pill good">已確認</span>':''}
-              ${hasImg?'<span class="pill">有圖</span>':'<span class="pill warn">缺圖</span>'}
-              ${hasLink?'<span class="pill">有連結</span>':'<span class="pill warn">缺連結</span>'}
-            </div>
-          </div>
-
-          <div class="thumb">
-            ${
-              hasImg
-                ? `<a href="${escapeAttr(hasLink?e.link:e.searchUrl)}" target="_blank" rel="noopener" title="${escapeAttr(hasLink?'開啟真實品項連結':'尚未填真實連結，先開搜尋')}">
-                     <img src="${escapeAttr(e.image)}" alt="#${pad3(e.id)} ${escapeAttr(e.zh)}" loading="lazy">
-                   </a>`
-                : `<div class="placeholder">
-                     尚未設定預覽圖<br/>
-                     點卡片貼上 Image URL<br/>
-                     或按 <b>S</b> 開搜尋
-                   </div>`
-            }
-          </div>
-
-          <div class="foot">
-            <div class="src" title="${escapeAttr(hasLink?e.link:e.searchUrl)}">
-              ${hasLink ? `<a href="${escapeAttr(e.link)}" target="_blank" rel="noopener">${escapeHtml(trimUrl(e.link))}</a>`
-                        : `<a href="${escapeAttr(e.searchUrl)}" target="_blank" rel="noopener">（尚未填真實連結）點我先搜尋</a>`}
-            </div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <button class="pill" data-act="search" title="開啟搜尋（Google 圖片）">搜尋</button>
-              <button class="pill" data-act="edit" title="編輯這格（貼圖與連結）">編輯</button>
-            </div>
-          </div>
-        `;
-
-        card.addEventListener('click', (ev)=>{
-          const btn = ev.target?.closest?.('[data-act]');
-          if(btn){
-            ev.stopPropagation();
-            const act = btn.getAttribute('data-act');
-            if(act==='search') window.open(e.searchUrl, '_blank', 'noopener');
-            if(act==='edit') openModal(e.id);
-            return;
-          }
-          openModal(e.id);
-        });
-
-        card.addEventListener('keydown', (ev)=>{
-          if(ev.key==='Enter' || ev.key===' ') openModal(e.id);
-          if(ev.key==='s' || ev.key==='S') window.open(e.searchUrl, '_blank', 'noopener');
-        });
-
-        grid.appendChild(card);
-      }
-
-      renderStats();
     }
+  }
 
-    function escapeHtml(s){
-      return (s||"").replace(/[&<>\"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
-    }
-    function escapeAttr(s){
-      return escapeHtml(s).replace(/\n/g,' ');
-    }
-    function trimUrl(u){
-      try{
-        const url = new URL(u);
-        return url.hostname + url.pathname.slice(0,32) + (url.pathname.length>32?'…':'');
-      }catch{
-        return (u||"").slice(0,36) + ((u||"").length>36?'…':'');
-      }
-    }
+  async function loadData(){
+    const res = await fetch("./data/sold.json?ts="+Date.now());
+    if(!res.ok) throw new Error("讀取 data/sold.json 失敗");
+    RAW = await res.json();
+  }
 
-    // Modal logic
-    const modal = document.getElementById('modal');
-    const mNum = document.getElementById('mNum');
-    const mTitle = document.getElementById('mTitle');
-    const mImg = document.getElementById('mImg');
-    const mZh = document.getElementById('mZh');
-    const mImage = document.getElementById('mImage');
-    const mLink = document.getElementById('mLink');
-    const mNote = document.getElementById('mNote');
+  document.getElementById("btnReload").addEventListener("click", async ()=>{
+    await loadData(); render();
+  });
+  document.getElementById("kw").addEventListener("change", render);
+  document.getElementById("sort").addEventListener("change", render);
+  document.getElementById("q").addEventListener("input", render);
 
-    function openModal(id){
-      const e = state.data.find(x=>x.id===id);
-      if(!e) return;
-      state.activeId=id;
-
-      mNum.textContent = `#${pad3(e.id)}`;
-      mTitle.textContent = e.zh || (e.id===150?"超夢":"（待填）");
-      mZh.innerHTML = `<b>${escapeHtml(e.zh||"")}</b>`;
-
-      mImage.value = e.image || "";
-      mLink.value = e.link || "";
-      mNote.value = e.note || "";
-
-      mImg.innerHTML = e.image
-        ? `<a href="${escapeAttr(e.link||e.searchUrl)}" target="_blank" rel="noopener" title="${escapeAttr(e.link?'開啟真實品項':'尚未填真實連結，先開搜尋')}"><img src="${escapeAttr(e.image)}" alt=""></a>`
-        : `<div class="placeholder" style="padding:18px;color:var(--muted);text-align:center">尚未設定預覽圖。<br/>請在右側貼上 Image URL 後儲存。</div>`;
-
-      modal.showModal();
-    }
-
-    function closeModal(){
-      modal.close();
-      state.activeId=null;
-    }
-
-    document.getElementById('mClose').addEventListener('click', closeModal);
-    modal.addEventListener('click', (ev)=>{ if(ev.target===modal) closeModal(); });
-    window.addEventListener('keydown', (ev)=>{ if(ev.key==='Escape' && modal.open) closeModal(); });
-
-    function persist(){
-      const id = state.activeId;
-      if(!id) return;
-      const e = state.data.find(x=>x.id===id);
-      if(!e) return;
-
-      e.image = (mImage.value||"").trim();
-      e.link  = (mLink.value||"").trim();
-      e.note  = (mNote.value||"").trim();
-
-      // Keep #150 priority note
-      if(id===150 && !e.note.includes("優先追蹤")){
-        e.note = (e.note ? (e.note+"\n") : "") + "#150 超夢：優先追蹤";
-      }
-
-      save();
-      openModal(id);
-      render();
-    }
-
-    document.getElementById('btnSave').addEventListener('click', persist);
-
-    document.getElementById('btnClear').addEventListener('click', ()=>{
-      const id = state.activeId;
-      if(!id) return;
-      const e = state.data.find(x=>x.id===id);
-      e.image=""; e.link=""; e.note = (id===150 ? "#150 超夢：優先追蹤" : "");
-      e.verified=false;
-      save();
-      openModal(id);
-      render();
-    });
-
-    document.getElementById('btnMarkOk').addEventListener('click', ()=>{
-      const id = state.activeId;
-      if(!id) return;
-      const e = state.data.find(x=>x.id===id);
-      e.verified = !e.verified;
-      if(id===150 && !e.note.includes("優先追蹤")){
-        e.note = (e.note ? (e.note+"\n") : "") + "#150 超夢：優先追蹤";
-      }
-      save();
-      openModal(id);
-      render();
-    });
-
-    document.getElementById('btnOpenItem').addEventListener('click', ()=>{
-      const url = (mLink.value||"").trim();
-      if(!url) return toast("尚未填真實連結");
-      window.open(url, '_blank', 'noopener');
-    });
-
-    document.getElementById('btnSearch').addEventListener('click', ()=>{
-      const id = state.activeId;
-      if(!id) return;
-      const e = state.data.find(x=>x.id===id);
-      window.open(e.searchUrl, '_blank', 'noopener');
-    });
-
-    // Top bar search & filter
-    document.getElementById('q').addEventListener('input', (ev)=>{ state.q = ev.target.value; render(); });
-    document.getElementById('filter').addEventListener('change', (ev)=>{ state.filter = ev.target.value; render(); });
-
-    // Export / Import JSON
-    function exportJSON(){
-      const blob = new Blob([JSON.stringify(state.data,null,2)], {type:'application/json'});
-      const url = URL.createObjectURL(blob);
-      const a=document.createElement('a');
-      a.href=url;
-      a.download='pokepark-kanto-151-links.json';
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    async function importJSONFile(file){
-      const text = await file.text();
-      const data = JSON.parse(text);
-      if(!Array.isArray(data) || data.length!==151) throw new Error("JSON 必須是 151 筆陣列");
-      state.data = data.map((x,i)=>({
-        id: x.id ?? (i+1),
-        zh: x.zh || (ZH[i+1]||""),
-        image: x.image || "",
-        link: x.link || "",
-        note: x.note || "",
-        verified: !!x.verified,
-        searchUrl: mkSearchUrl((x.id ?? (i+1)), x.zh || (ZH[i+1]||""))
-      })).sort((a,b)=>a.id-b.id);
-
-      // Ensure #150 note
-      const mew = state.data.find(x=>x.id===150);
-      if(mew && !mew.note.includes("優先追蹤")) mew.note = (mew.note? (mew.note+"\n") : "") + "#150 超夢：優先追蹤";
-
-      save();
-      render();
-      toast("已匯入 ✅");
-    }
-
-    document.getElementById('btnExport').addEventListener('click', exportJSON);
-    document.getElementById('btnImport').addEventListener('click', ()=>document.getElementById('jsonPicker').click());
-    document.getElementById('jsonPicker').addEventListener('change', async (ev)=>{
-      const f = ev.target.files?.[0];
-      ev.target.value='';
-      if(!f) return;
-      try{ await importJSONFile(f); }
-      catch(err){ alert("匯入失敗："+err.message); }
-    });
-
-    document.getElementById('btnReset').addEventListener('click', ()=>{
-      if(!confirm("確定要清空本機資料並重置嗎？（你貼過的圖片/連結會消失）")) return;
-      state.data = seed();
-      localStorage.removeItem(KEY);
-      save();
-      render();
-    });
-
-    // Init
-    render();
-  </script>
+  (async ()=>{ await loadData(); render(); })();
+</script>
 </body>
 </html>
