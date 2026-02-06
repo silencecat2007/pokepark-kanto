@@ -1,5 +1,26 @@
 {
-  "updated_at": "2026-02-06T20:32:55.913326+00:00",
-  "count": 0,
-  "items": []
+  "updated_at": "2026-02-07T05:40:58+08:00",
+  "count": 2,
+  "items": [
+    {
+      "keyword": "ポケパークカントー ピンバッジ",
+      "url": "https://jp.mercari.com/item/m80901634437",
+      "title": "【未開封】ポケパークカントー ピンバッチ未開封10個+プレミアボール +限定紙袋 by メルカリ",
+      "no": null,
+      "pokemon_name_guess": null,
+      "currency": "JPY",
+      "price": 25000,
+      "captured_at": "2026-02-07T05:41:45+08:00"
+    },
+    {
+      "keyword": "ポケパークカントー ピンバッジ",
+      "url": "https://jp.mercari.com/item/m78725517170",
+      "title": "ポケパーク 限定 ピンズ ピンバッジ アーボック Pokemon by メルカリ",
+      "no": null,
+      "pokemon_name_guess": null,
+      "currency": "JPY",
+      "price": 1400,
+      "captured_at": "2026-02-07T05:41:52+08:00"
+    }
+  ]
 }
