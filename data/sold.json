@@ -1,26 +1,19 @@
 {
-  "updated_at": "2026-02-07T05:40:58+08:00",
-  "count": 2,
-  "items": [
+  "updated_at": "2026-02-06T22:01:43.918658+00:00",
+  "count": 0,
+  "items": [],
+  "debug": [
     {
       "keyword": "ポケパークカントー ピンバッジ",
-      "url": "https://jp.mercari.com/item/m80901634437",
-      "title": "【未開封】ポケパークカントー ピンバッチ未開封10個+プレミアボール +限定紙袋 by メルカリ",
-      "no": null,
-      "pokemon_name_guess": null,
-      "currency": "JPY",
-      "price": 25000,
-      "captured_at": "2026-02-07T05:41:45+08:00"
+      "url": "https://jp.mercari.com/search?keyword=%E3%83%9D%E3%82%B1%E3%83%91%E3%83%BC%E3%82%AF%E3%82%AB%E3%83%B3%E3%83%88%E3%83%BC%20%E3%83%94%E3%83%B3%E3%83%90%E3%83%83%E3%82%B8",
+      "status": 200,
+      "debug_html": "debug/search_ポケパークカントー_ピンバッジ.html"
     },
     {
-      "keyword": "ポケパークカントー ピンバッジ",
-      "url": "https://jp.mercari.com/item/m78725517170",
-      "title": "ポケパーク 限定 ピンズ ピンバッジ アーボック Pokemon by メルカリ",
-      "no": null,
-      "pokemon_name_guess": null,
-      "currency": "JPY",
-      "price": 1400,
-      "captured_at": "2026-02-07T05:41:52+08:00"
+      "keyword": "pokemon park kanto pin",
+      "url": "https://jp.mercari.com/search?keyword=pokemon%20park%20kanto%20pin",
+      "status": 200,
+      "debug_html": "debug/search_pokemon_park_kanto_pin.html"
     }
   ]
 }
