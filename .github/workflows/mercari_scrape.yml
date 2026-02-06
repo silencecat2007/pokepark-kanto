@@ -3,7 +3,6 @@ name: Mercari Sold Scraper
 on:
   workflow_dispatch:
   schedule:
-    # 每天台灣時間 04:30 ≈ UTC 20:30
     - cron: "30 20 * * *"
 
 permissions:
@@ -19,6 +18,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -38,9 +40,15 @@ jobs:
           python scripts/scrape_mercari.py
 
       - name: Commit & push data
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 這行是關鍵：把 remote 換成帶 token 的 HTTPS
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+
           git add data/sold.json debug/*
           git diff --cached --quiet || git commit -m "Update Mercari sold data"
-          git push
+          git push origin HEAD:main
