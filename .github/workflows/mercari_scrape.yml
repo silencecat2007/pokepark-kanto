@@ -49,6 +49,7 @@ jobs:
           # 這行是關鍵：把 remote 換成帶 token 的 HTTPS
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
 
-          git add data/sold.json debug/*
+          git add data/sold.json
+          
           git diff --cached --quiet || git commit -m "Update Mercari sold data"
           git push origin HEAD:main
