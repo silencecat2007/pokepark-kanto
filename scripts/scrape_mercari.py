@@ -1,157 +1,160 @@
-# scripts/scrape_mercari.py
-import json, re, time, random
+import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
 OUT = Path("data/sold.json")
-DBG_DIR = Path("debug")
+DEBUG_DIR = Path("debug")
 OUT.parent.mkdir(parents=True, exist_ok=True)
-DBG_DIR.mkdir(parents=True, exist_ok=True)
+DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 
+# 你要求：搜尋條件去掉編號，只用關鍵字
 KEYWORDS = [
     "ポケパークカントー ピンバッジ",
     "pokemon park kanto pin",
 ]
 
-# 你要抓的格式：標題含「No. 0138 オムナイト」這種
-RE_NO = re.compile(r"\bNo\.?\s*0*(\d{1,4})\b", re.IGNORECASE)
+# Mercari：status=sold_out|trading 會包含已售出/交易中（至少不會只剩「販售中」）
+def build_search_url(keyword: str) -> str:
+    from urllib.parse import quote
+    return (
+        "https://jp.mercari.com/search"
+        f"?keyword={quote(keyword)}"
+        "&status=sold_out%7Ctrading"
+        "&order=desc&sort=created_time"
+    )
 
-# 常見：No. 0138 オムナイト / No.0138 オムナイト
-def parse_no_and_name(title: str):
-    m = RE_NO.search(title or "")
+NO_RE = re.compile(r"No\.?\s*0*([0-9]{1,3})", re.IGNORECASE)
+
+def extract_no_and_name(title: str):
+    """
+    例：
+    'ポケパーク カントー ピンバッジ No. 0138 オムナイト'
+    -> no=138, pokemon_name='オムナイト'
+    """
+    m = NO_RE.search(title or "")
     if not m:
         return None, None
     no = int(m.group(1))
-    # 嘗試取 No 後面第一段文字當寶可夢名（非常保守）
-    tail = title[m.end():].strip()
-    # 去掉多餘符號
-    tail = re.sub(r"^[\-\:\｜\|\／/]+", "", tail).strip()
-    # 取第一段（遇到空白/括號/【】就切）
-    name = re.split(r"[\s\(\)（）。．【】\[\]｜\|/／:：\-–—]+", tail)[0].strip()
-    if not name:
-        name = None
-    return no, name
 
-def now_iso():
-    return datetime.now(timezone.utc).isoformat()
+    # 名稱：取 No. #### 之後的文字，去掉多餘符號後取最後一段
+    tail = (title[m.end():] if title else "").strip()
+    tail = re.sub(r"[｜|/（）()\[\]【】]+", " ", tail).strip()
+    pokemon_name = tail.split()[-1] if tail else None
+    return no, pokemon_name
 
-def safe_filename(s: str):
-    s = s.strip().replace(" ", "_")
-    s = re.sub(r"[^\w\u3000-\u30ff\u4e00-\u9fff\-\_]+", "_", s)
-    return s[:120] or "debug"
-
-def scrape_one_keyword(page, keyword: str):
-    # Mercari JP 搜尋（注意：Mercari 參數可能會變，先用最穩的 keyword）
-    url = "https://jp.mercari.com/search?keyword=" + __import__("urllib.parse").parse.quote(keyword)
-    page.goto(url, wait_until="domcontentloaded", timeout=60000)
-
-    # 讓 JS 有時間把卡片渲染出來（保守做法：等一下+嘗試等待某些元素）
-    page.wait_for_timeout(2500)
-
-    # 滾動幾次載入更多
-    for _ in range(3):
-        page.mouse.wheel(0, 1200)
-        page.wait_for_timeout(1200)
-
-    html = page.content()
-    dbg_path = DBG_DIR / f"search_{safe_filename(keyword)}.html"
-    dbg_path.write_text(html, encoding="utf-8")
-
-    items = []
-
-    # 嘗試抓商品卡片連結（多種 selector fallback）
-    # Mercari 版型會變，所以這裡做「盡量抓到 href 像 /item/… 的連結」
-    links = page.locator('a[href^="/item/"]').all()
-    seen = set()
-
-    for a in links:
-        try:
-            href = a.get_attribute("href") or ""
-            if not href.startswith("/item/"):
-                continue
-            if href in seen:
-                continue
-            seen.add(href)
-
-            # 嘗試從卡片附近拿 title/price（向上找最近可見文字）
-            # 這段是保守抓法：拿 a 的 inner_text + 父層 text
-            title = (a.inner_text() or "").strip()
-            container_text = (a.locator("xpath=ancestor::*[1]").inner_text() or "").strip()
-            blob = (title + "\n" + container_text).strip()
-
-            # 先從 blob 裡找像「¥12,345」的價格
-            m_price = re.search(r"¥\s*([\d,]+)", blob)
-            price = int(m_price.group(1).replace(",", "")) if m_price else None
-
-            # 如果還是沒價錢，再往上找大一層
-            if price is None:
-                up = a.locator("xpath=ancestor::*[2]")
-                blob2 = (up.inner_text() or "").strip()
-                m_price = re.search(r"¥\s*([\d,]+)", blob2)
-                price = int(m_price.group(1).replace(",", "")) if m_price else None
-                if not title:
-                    title = blob2.split("\n")[0].strip()
-
-            # 最少要有標題與價格才收
-            if not title:
-                continue
-            if price is None:
-                continue
-
-            no, pname = parse_no_and_name(title)
-            # 你要的是「有標示 151 編號 + 寶可夢名」的賣場：沒 No 的就略過
-            if not no:
-                continue
-
-            item_url = "https://jp.mercari.com" + href
-
-            items.append({
-                "keyword": keyword,
-                "title": title,
-                "price_jpy": price,
-                "sold_at": now_iso(),   # 這裡先用抓取時間（要更精準需進 item 頁抓售出時間）
-                "item_url": item_url,
-                "no": no,
-                "pokemon_name": pname or "",
-            })
-
-        except Exception:
-            continue
-
-    return {
-        "keyword": keyword,
-        "url": url,
-        "status": 200,
-        "debug_html": str(dbg_path),
-        "found": len(items),
-        "items": items,
-    }
+def money_to_int(text: str):
+    # "¥12,999" -> 12999
+    if not text:
+        return None
+    t = text.replace("¥", "").replace(",", "").strip()
+    return int(t) if t.isdigit() else None
 
 def main():
+    updated_at = datetime.now(timezone.utc).isoformat()
     all_items = []
     debug = []
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        # 假裝正常瀏覽器
-        page.set_extra_http_headers({
-            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-        })
+        context = browser.new_context(
+            locale="ja-JP",
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+        )
+        page = context.new_page()
 
         for kw in KEYWORDS:
-            # 低頻率 + 隨機延遲
-            time.sleep(random.uniform(1.2, 2.4))
-            r = scrape_one_keyword(page, kw)
-            debug.append({k: r[k] for k in ["keyword","url","status","debug_html","found"]})
-            all_items.extend(r["items"])
+            url = build_search_url(kw)
+            page.goto(url, wait_until="domcontentloaded")
 
+            # 等商品卡片出現（Mercari 可能會延遲載入）
+            # 找不到就存 debug 讓你看
+            try:
+                page.wait_for_timeout(1200)
+                # 滾動幾次讓更多結果載入
+                for _ in range(5):
+                    page.mouse.wheel(0, 2000)
+                    page.wait_for_timeout(800)
+
+                html = page.content()
+            except Exception:
+                html = page.content()
+
+            dbg_name = f"search_{kw}.html"
+            dbg_name = (
+                dbg_name.replace(" ", "_")
+                .replace("/", "_")
+                .replace("\\", "_")
+            )
+            dbg_path = DEBUG_DIR / dbg_name
+            dbg_path.write_text(html, encoding="utf-8")
+
+            debug.append({
+                "keyword": kw,
+                "url": url,
+                "debug_html": str(dbg_path).replace("\\", "/"),
+            })
+
+            # ✅ 從 DOM 抓商品卡片（Mercari 版面會變，這組 selector 盡量寫寬鬆）
+            # 抓所有 /item/xxxxx 的連結，再往上找價格/標題
+            links = page.query_selector_all('a[href^="/item/"]')
+            seen = set()
+
+            for a in links:
+                href = a.get_attribute("href") or ""
+                if not href.startswith("/item/"):
+                    continue
+                item_url = "https://jp.mercari.com" + href
+                if item_url in seen:
+                    continue
+                seen.add(item_url)
+
+                # 盡量從同一張卡片容器內找 title/price
+                container = a.locator("xpath=ancestor-or-self::*[self::li or self::div][1]")
+                title = None
+                price = None
+
+                # title：常見是 aria-label 或卡片內文字
+                title = a.get_attribute("aria-label")
+                if not title:
+                    try:
+                        title = a.inner_text().strip()
+                    except Exception:
+                        title = None
+
+                # price：抓包含 ¥ 的文字（卡片內通常有）
+                try:
+                    price_text = container.locator('xpath=.//*[contains(text(),"¥")]').first.inner_text().strip()
+                    price = money_to_int(price_text)
+                except Exception:
+                    price = None
+
+                no, pokemon_name = extract_no_and_name(title or "")
+                if not no:
+                    continue
+
+                all_items.append({
+                    "keyword": kw,
+                    "no": no,
+                    "pokemon_name": pokemon_name,
+                    "title": title,
+                    "price_jpy": price,
+                    # 沒有「真實成交時間」就用抓取時間當時間軸（每天跑一次就能看趨勢）
+                    "sold_at": updated_at,
+                    "item_url": item_url,
+                })
+
+        context.close()
         browser.close()
 
     payload = {
-        "updated_at": now_iso(),
+        "updated_at": updated_at,
         "count": len(all_items),
         "items": all_items,
         "debug": debug,
