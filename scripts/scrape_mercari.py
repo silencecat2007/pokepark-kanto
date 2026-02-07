@@ -19,11 +19,10 @@ KEYWORDS = [
     "pokemon park kanto pin",
     "ポケパークカントー ピンバッジ",
 ]
-
 STATUSES = ["sold_out", "on_sale"]
 
-MAX_LINKS_PER_SEARCH = 80        # 每個搜尋頁最多拿幾個 item 連結
-MAX_ITEM_PAGES_TOTAL = 120       # 全部搜尋合計最多打開幾個 item 頁（避免跑太久）
+MAX_LINKS_PER_SEARCH = 80
+MAX_ITEM_PAGES_TOTAL = 140
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -46,7 +45,10 @@ def text_to_jpy(text: str) -> Optional[int]:
     return int(m.group(1)) if m else None
 
 def load_or_fetch_pokemon_ja() -> List[Dict]:
-    """抓 1~151 日文名（ja-Hrkt）並快取。"""
+    """
+    1~151 日文名（ja-Hrkt）快取。
+    ⚠️ 若快取被污染，請先刪除 data/pokemon_151_ja.json 再跑一次。
+    """
     if POKE_CACHE.exists():
         return json.loads(POKE_CACHE.read_text(encoding="utf-8"))
 
@@ -63,12 +65,12 @@ def load_or_fetch_pokemon_ja() -> List[Dict]:
         ja = ""
         for n in data.get("names", []):
             if n.get("language", {}).get("name") == "ja-Hrkt":
-                ja = n.get("name", "")
+                ja = n.get("name", "").strip()
                 break
         if not ja:
             for n in data.get("names", []):
                 if n.get("language", {}).get("name") == "ja":
-                    ja = n.get("name", "")
+                    ja = n.get("name", "").strip()
                     break
 
         out.append({"no": no, "ja": ja})
@@ -77,10 +79,11 @@ def load_or_fetch_pokemon_ja() -> List[Dict]:
     POKE_CACHE.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     return out
 
-def make_name_matcher(poke_ja: List[Dict]) -> Tuple[re.Pattern, Dict[str, int]]:
-    """建立最長優先的名稱 regex，避免短字撞長字。"""
-    name_to_no = {}
-    names = []
+def make_name_matcher(poke_ja: List[Dict]) -> Tuple[re.Pattern, Dict[str, int], List[str]]:
+    """最長優先，避免短字撞長字；回傳 regex + name->no + name list"""
+    name_to_no: Dict[str, int] = {}
+    names: List[str] = []
+
     for row in poke_ja:
         name = (row.get("ja") or "").strip()
         no = int(row.get("no"))
@@ -91,13 +94,10 @@ def make_name_matcher(poke_ja: List[Dict]) -> Tuple[re.Pattern, Dict[str, int]]:
 
     names.sort(key=len, reverse=True)
     pat = re.compile("|".join(re.escape(n) for n in names))
-    return pat, name_to_no
+    return pat, name_to_no, names
 
 def collect_item_links(page) -> List[str]:
-    """從搜尋頁收集 /item/ 連結（滾動載入）。"""
     collected = set()
-
-    # 等到有 item 連結
     page.wait_for_selector("a[href^='/item/']", timeout=25000)
 
     for _ in range(10):
@@ -115,12 +115,40 @@ def collect_item_links(page) -> List[str]:
 
     return list(collected)
 
+def extract_price_from_jsonld(html: str) -> Optional[int]:
+    # 嘗試從 <script type="application/ld+json"> 解析 offers.price
+    for m in re.finditer(r'<script[^>]+type="application/ld\+json"[^>]*>(.*?)</script>', html, re.S | re.I):
+        raw = m.group(1).strip()
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
+
+        # 有些是 list
+        candidates = data if isinstance(data, list) else [data]
+        for obj in candidates:
+            if not isinstance(obj, dict):
+                continue
+            offers = obj.get("offers")
+            if isinstance(offers, dict):
+                price = offers.get("price")
+                if price is not None:
+                    try:
+                        return int(float(str(price)))
+                    except Exception:
+                        pass
+    return None
+
 def extract_item_detail(page) -> Tuple[Optional[str], Optional[int], Optional[str]]:
     """
-    從 item 頁抓：標題 / 價格 / 狀態文字（賣切等）
-    （選擇器可能會變，所以用多段 fallback）
+    由 item 頁抓：title / price / status_hint
+    價格優先順序：
+    1) meta product:price:amount / og:price:amount
+    2) JSON-LD offers.price
+    3) body text fallback（不穩）
     """
-    # title
     title = None
     h1 = page.query_selector("h1")
     if h1:
@@ -129,32 +157,69 @@ def extract_item_detail(page) -> Tuple[Optional[str], Optional[int], Optional[st
             title = t
 
     if not title:
-        # fallback：找 meta
         mt = page.query_selector("meta[property='og:title']")
         if mt:
             title = (mt.get_attribute("content") or "").strip() or None
 
-    body_text = (page.inner_text("body") or "")
+    # price: meta
+    price = None
+    for sel in [
+        "meta[property='product:price:amount']",
+        "meta[property='og:price:amount']",
+        "meta[name='twitter:data1']",
+    ]:
+        node = page.query_selector(sel)
+        if node:
+            c = (node.get_attribute("content") or "").strip()
+            price = text_to_jpy(c) or (int(c) if c.isdigit() else None)
+            if price is not None:
+                break
 
-    # price
-    price = text_to_jpy(body_text)
+    # price: JSON-LD
+    if price is None:
+        try:
+            html = page.content()
+            price = extract_price_from_jsonld(html)
+        except Exception:
+            pass
 
-    # status hint
+    # price: fallback from body text
+    if price is None:
+        try:
+            body_text = page.inner_text("body") or ""
+            price = text_to_jpy(body_text)
+        except Exception:
+            pass
+
     status_hint = None
-    # 常見：売り切れ / SOLD / 取引中 等
-    for k in ["売り切れ", "SOLD", "取引中", "販売中"]:
-        if k in body_text:
-            status_hint = k
-            break
+    try:
+        body_text = page.inner_text("body") or ""
+        for k in ["売り切れ", "SOLD", "取引中", "販売中"]:
+            if k in body_text:
+                status_hint = k
+                break
+    except Exception:
+        pass
 
     return title, price, status_hint
 
 def main():
     poke_ja = load_or_fetch_pokemon_ja()
-    name_re, name_to_no = make_name_matcher(poke_ja)
+    name_re, name_to_no, names = make_name_matcher(poke_ja)
 
-    items = []
-    debug = []
+    # 安全檢查：防止快取污染（你現在就是這種狀況）
+    # 151 名稱不該出現「サムネイル」「ピンズ」這類字
+    bad_tokens = ["サムネイル", "ピンズ", "ピンバッジ", "No.", "Ｎｏ", "ポケパーク"]
+    bad_names = [n for n in names if any(t in n for t in bad_tokens)]
+    if bad_names:
+        raise RuntimeError(
+            "pokemon_151_ja.json 可能被污染（名稱包含不應該出現的字）。"
+            "請刪除 data/pokemon_151_ja.json 後再跑一次。"
+            f" 例如：{bad_names[:5]}"
+        )
+
+    items: List[Dict] = []
+    debug: List[Dict] = []
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -179,6 +244,7 @@ def main():
                 visited = 0
                 matched = 0
                 errors = 0
+                price_null = 0
 
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
@@ -197,7 +263,6 @@ def main():
                     })
                     continue
 
-                # 逐一打開 item 頁抓標題/價格
                 for item_url in links:
                     if item_url in seen_item_urls:
                         continue
@@ -211,7 +276,7 @@ def main():
                         visited += 1
 
                         page.goto(item_url, wait_until="domcontentloaded", timeout=60000)
-                        sleep_small(0.3, 0.6)
+                        sleep_small(0.25, 0.55)
 
                         title, price, status_hint = extract_item_detail(page)
                         if not title:
@@ -219,8 +284,9 @@ def main():
 
                         m = name_re.search(title)
                         if not m:
-                            continue  # 標題沒含 151 任何一隻日文名，就跳過
+                            continue
 
+                        # ✅ 只取純寶可夢名（regex 本身已是 151 名稱集合）
                         pkm_name = m.group(0)
                         no = name_to_no.get(pkm_name)
                         if not no:
@@ -229,17 +295,19 @@ def main():
                         matched += 1
                         t = now_iso()
 
-                        # UI 需要 sold_at 才能畫圖：這裡用 scraped_at 代替（至少能追蹤趨勢）
+                        if price is None:
+                            price_null += 1
+
                         items.append({
                             "keyword": kw,
                             "listing_status": st,        # sold_out / on_sale
-                            "status_hint": status_hint,  # 取引中/売り切れ等（可選）
+                            "status_hint": status_hint,  # 取引中/売り切れ等
                             "no": no,
                             "pokemon_name": pkm_name,
                             "title": title,
                             "price_jpy": price,
                             "item_url": item_url,
-                            "sold_at": t,                # 用抓取時間當作時間序列點
+                            "sold_at": t,                # 用抓取時間當時間點（讓 UI 能畫趨勢）
                             "scraped_at": t,
                         })
 
@@ -256,6 +324,7 @@ def main():
                     "collected_links": collected_links,
                     "visited_items": visited,
                     "matched_items": matched,
+                    "price_null": price_null,
                     "errors": errors
                 })
 
