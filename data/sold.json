@@ -1,17 +1,112 @@
 {
-  "updated_at": "2026-02-07T11:22:31.045123+00:00",
-  "count": 0,
-  "items": [],
-  "debug": [
+  "updated_at": "2026-02-07T18:14:13.668916+00:00",
+  "count": 8,
+  "items": [
     {
-      "keyword": "pokemon park kanto pin",
-      "url": "https://jp.mercari.com/search?keyword=pokemon%20park%20kanto%20pin",
-      "status": 200
+      "keyword": "ポケパークカントー ピンバッジ",
+      "listing_status": "sold_out",
+      "no": 138,
+      "pokemon_name": "オムナイトのサムネイル",
+      "title": "ポケパーク カントー ピンバッジ No. 0138 オムナイトのサムネイル",
+      "price_jpy": null,
+      "item_url": "https://jp.mercari.com/item/m76210137426",
+      "scraped_at": "2026-02-07T18:13:57.369315+00:00"
     },
     {
       "keyword": "ポケパークカントー ピンバッジ",
-      "url": "https://jp.mercari.com/search?keyword=ポケパークカントー%20ピンバッジ",
-      "status": 200
+      "listing_status": "sold_out",
+      "no": 35,
+      "pokemon_name": "ピッピのサムネイル",
+      "title": "ポケパーク カントー ピンバッジ No.0035 ピッピのサムネイル",
+      "price_jpy": null,
+      "item_url": "https://jp.mercari.com/item/m97934090026",
+      "scraped_at": "2026-02-07T18:13:57.781021+00:00"
+    },
+    {
+      "keyword": "ポケパークカントー ピンバッジ",
+      "listing_status": "sold_out",
+      "no": 39,
+      "pokemon_name": "プリンのサムネイル",
+      "title": "ポケパーク カントー ピンバッジ No.0039 プリンのサムネイル",
+      "price_jpy": null,
+      "item_url": "https://jp.mercari.com/item/m78598885530",
+      "scraped_at": "2026-02-07T18:13:57.914154+00:00"
+    },
+    {
+      "keyword": "ポケパークカントー ピンバッジ",
+      "listing_status": "sold_out",
+      "no": 151,
+      "pokemon_name": "ミュウのサムネイル",
+      "title": "ポケモン ポケパーク カントー ピンズ No.0151 ミュウのサムネイル",
+      "price_jpy": null,
+      "item_url": "https://jp.mercari.com/item/m19268480869",
+      "scraped_at": "2026-02-07T18:13:58.369193+00:00"
+    },
+    {
+      "keyword": "ポケパークカントー ピンバッジ",
+      "listing_status": "sold_out",
+      "no": 82,
+      "pokemon_name": "レアコイルのサムネイル",
+      "title": "ポケパーク カントー ピンバッジ No.0082 レアコイルのサムネイル",
+      "price_jpy": null,
+      "item_url": "https://jp.mercari.com/item/m29071958469",
+      "scraped_at": "2026-02-07T18:13:58.664310+00:00"
+    },
+    {
+      "keyword": "ポケパークカントー ピンバッジ",
+      "listing_status": "on_sale",
+      "no": 77,
+      "pokemon_name": "ポニータ",
+      "title": "ポケパークカントー限定 No. 0077 ポニータ　ピンズのサムネイル",
+      "price_jpy": null,
+      "item_url": "https://jp.mercari.com/item/m64208612636",
+      "scraped_at": "2026-02-07T18:14:11.407669+00:00"
+    },
+    {
+      "keyword": "ポケパークカントー ピンバッジ",
+      "listing_status": "on_sale",
+      "no": 52,
+      "pokemon_name": "ピンズのサムネイル",
+      "title": "ポケパーク カントー ニャース ピンバッジ NO.0052 ピンズのサムネイル",
+      "price_jpy": null,
+      "item_url": "https://jp.mercari.com/item/m59356956047",
+      "scraped_at": "2026-02-07T18:14:11.611232+00:00"
+    },
+    {
+      "keyword": "ポケパークカントー ピンバッジ",
+      "listing_status": "on_sale",
+      "no": 52,
+      "pokemon_name": "ニャースのサムネイル",
+      "title": "ポケモン ポケパーク カントー ピンズ No.0052 ニャースのサムネイル",
+      "price_jpy": null,
+      "item_url": "https://jp.mercari.com/item/m89138313001",
+      "scraped_at": "2026-02-07T18:14:12.453831+00:00"
+    }
+  ],
+  "debug": [
+    {
+      "keyword": "pokemon park kanto pin",
+      "status": "sold_out",
+      "url": "https://jp.mercari.com/search?keyword=pokemon%20park%20kanto%20pin&status=sold_out",
+      "collected_links": 17
+    },
+    {
+      "keyword": "pokemon park kanto pin",
+      "status": "on_sale",
+      "url": "https://jp.mercari.com/search?keyword=pokemon%20park%20kanto%20pin&status=on_sale",
+      "collected_links": 17
+    },
+    {
+      "keyword": "ポケパークカントー ピンバッジ",
+      "status": "sold_out",
+      "url": "https://jp.mercari.com/search?keyword=%E3%83%9D%E3%82%B1%E3%83%91%E3%83%BC%E3%82%AF%E3%82%AB%E3%83%B3%E3%83%88%E3%83%BC%20%E3%83%94%E3%83%B3%E3%83%90%E3%83%83%E3%82%B8&status=sold_out",
+      "collected_links": 95
+    },
+    {
+      "keyword": "ポケパークカントー ピンバッジ",
+      "status": "on_sale",
+      "url": "https://jp.mercari.com/search?keyword=%E3%83%9D%E3%82%B1%E3%83%91%E3%83%BC%E3%82%AF%E3%82%AB%E3%83%B3%E3%83%88%E3%83%BC%20%E3%83%94%E3%83%B3%E3%83%90%E3%83%83%E3%82%B8&status=on_sale",
+      "collected_links": 95
     }
   ]
 }
