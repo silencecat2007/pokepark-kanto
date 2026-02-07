@@ -25,7 +25,7 @@
     @media (max-width:1100px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
     @media (max-width:760px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media (max-width:520px){.grid{grid-template-columns:repeat(1,minmax(0,1fr))}}
-    .card{background:linear-gradient(180deg,#121624,#0f1320);border:1px solid var(--line);border-radius:16px;padding:12px}
+    .card{background:linear-gradient(180deg,#121624,#0f1320);border:1px solid var(--line);border-radius:16px;padding:12px;position:relative}
     .row{display:flex;justify-content:space-between;gap:10px;align-items:flex-end}
     .num{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}
     .name{font-size:14px;font-weight:750}
@@ -35,13 +35,13 @@
     .delta.up{color:#7CFFB2}
     .delta.down{color:#FF7C7C}
     .delta.flat{color:#C7D2FE}
-    .badge{font-size:12px;color:#cfe0ff;background:#1c2743;border:1px solid #2a3960;border-radius:999px;padding:4px 8px}
     .links{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
     a.pill{display:inline-flex;gap:8px;align-items:center;text-decoration:none;background:#1c2743;border:1px solid #2a3960;color:#cfe0ff;padding:6px 8px;border-radius:999px;font-size:12px}
     .chartWrap{margin-top:10px;background:#0b0d12;border:1px solid var(--line);border-radius:12px;padding:10px}
     canvas{width:100%;height:220px}
     .footer{margin-top:16px;color:var(--muted);font-size:12px;line-height:1.6}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    .badge{position:absolute;top:10px;right:10px;background:#1b2235;border:1px solid #2a3960;color:#cfe0ff;border-radius:999px;padding:6px 10px;font-size:12px}
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -51,33 +51,26 @@
       <div>
         <h1>PokéPark KANTO Pins 漲跌幅追蹤（Mercari）</h1>
         <div class="sub">
-          自動抓取 Mercari 搜尋結果，彙整 <span class="mono">No. ###</span>（1~151）相關刊登。<br/>
-          支援狀態：<span class="mono">已售出(sold_out)</span>＋<span class="mono">交易中(on_sale)</span>；漲跌幅以「已售出」做基準較合理。
+          只用日文關鍵字：<span class="mono">ポケパークカントー ピンバッジ</span><br/>
+          同時抓：已售出（sold_out）+ 交易中（on_sale）。匹配條件：標題只要含寶可夢名稱（No. 有就更準）。
         </div>
         <div class="chips" id="stats"></div>
       </div>
 
       <div class="bar">
-        <select id="kw">
-          <option value="pokemon park kanto pin">pokemon park kanto pin</option>
-          <option value="ポケパークカントー ピンバッジ">ポケパークカントー ピンバッジ</option>
-        </select>
-
-        <select id="st">
+        <select id="statusFilter">
+          <option value="all">狀態：全部</option>
           <option value="sold_out">狀態：已售出</option>
           <option value="on_sale">狀態：交易中</option>
-          <option value="all">狀態：全部</option>
         </select>
-
         <select id="sort">
-          <option value="delta">排序：漲跌幅（售出）</option>
-          <option value="latest">排序：最新價格（依狀態）</option>
-          <option value="median7">排序：7日中位數（售出）</option>
-          <option value="count7">排序：7日筆數（售出）</option>
+          <option value="delta_sold">排序：漲跌幅（已售出）</option>
+          <option value="latest_sold">排序：最新成交（已售出）</option>
+          <option value="latest_on">排序：最新價格（交易中）</option>
+          <option value="count">排序：資料筆數</option>
           <option value="id">排序：編號</option>
         </select>
-
-        <input id="q" placeholder="搜尋：編號/名稱（例 150 或 ミュウツー）" />
+        <input id="q" placeholder="搜尋：編號/名稱（例 150 或 ミュウ）" />
         <button id="btnReload">重新載入資料</button>
       </div>
     </header>
@@ -85,8 +78,7 @@
     <main class="grid" id="grid"></main>
 
     <div class="footer">
-      資料來源：Mercari 公開頁面（以低頻率擷取）。若遇到平台機制變動導致更新失敗，可到 Actions 看 log。<br/>
-      小提醒：交易中價格不等於成交價，漲跌幅建議以「已售出」觀察，才不會被賣家「開價夢到」干擾。
+      資料來源：Mercari 公開頁（以 Playwright 低頻率擷取）。若 Mercari 改版，請看 <span class="mono">data/sold.json</span> 內的 debug 統計與 debug HTML。
     </div>
   </div>
 
@@ -109,8 +101,8 @@
     "多刺菊石獸","化石盔","鐮刀盔","化石翼龍","卡比獸","急凍鳥","閃電鳥","火焰鳥","迷你龍","哈克龍",
     "快龍","超夢","夢幻"
   ];
-  const pad3 = n => String(n).padStart(3,"0");
 
+  const pad3 = n => String(n).padStart(3,"0");
   let RAW = null;
 
   function median(arr){
@@ -119,14 +111,17 @@
     const mid=Math.floor(a.length/2);
     return a.length%2? a[mid] : (a[mid-1]+a[mid])/2;
   }
+
   function pct(now, prev){
     if(prev==null || prev===0 || now==null) return null;
     return ((now-prev)/prev)*100;
   }
+
   function fmtJPY(n){
     if(n==null) return "—";
     return "¥" + Math.round(n).toLocaleString("ja-JP");
   }
+
   function deltaClass(v){
     if(v==null) return "flat";
     if(v>0.0001) return "up";
@@ -134,15 +129,13 @@
     return "flat";
   }
 
-  function buildStats(all, filtered){
+  function buildStats(all){
     const total = all.length;
-    const totalF = filtered.length;
-    const uniq = new Set(filtered.map(x=>x.no)).size;
+    const uniq = new Set(all.map(x=>x.no)).size;
     const updated = RAW?.updated_at ? new Date(RAW.updated_at).toLocaleString() : "—";
     const el=document.getElementById("stats");
     el.innerHTML = `
-      <span class="chip">資料總筆數 <strong>${total}</strong></span>
-      <span class="chip">目前顯示筆數 <strong>${totalF}</strong></span>
+      <span class="chip">資料筆數 <strong>${total}</strong></span>
       <span class="chip">覆蓋編號 <strong>${uniq}/151</strong></span>
       <span class="chip">更新時間 <strong>${updated}</strong></span>
     `;
@@ -156,59 +149,42 @@
       m.get(it.no).push(it);
     }
     for(const [k,v] of m){
-      v.sort((a,b)=>new Date(a.scraped_at)-new Date(b.scraped_at));
+      v.sort((a,b)=>new Date(a.observed_at)-new Date(b.observed_at));
     }
     return m;
   }
 
   function render(){
-    const kw=document.getElementById("kw").value;
-    const st=document.getElementById("st").value; // sold_out/on_sale/all
     const q=document.getElementById("q").value.trim().toLowerCase();
     const sort=document.getElementById("sort").value;
+    const st=document.getElementById("statusFilter").value;
 
-    const all = (RAW?.items||[]).filter(x=>x.keyword===kw);
+    const all = (RAW?.items||[]);
+    buildStats(all);
 
-    const items = all.filter(x=>{
-      if(st==="all") return true;
-      return x.listing_status===st;
-    });
-
-    buildStats(all, items);
-
-    // 漲跌/趨勢只用 sold_out
-    const soldOnly = all.filter(x=>x.listing_status==="sold_out");
-    const byNoSold = groupByNo(soldOnly);
-
-    // 顯示列表用目前狀態 items
-    const byNoShown = groupByNo(items);
+    const byNoAll = groupByNo(all);
 
     const rows = [];
     for(let no=1;no<=151;no++){
-      const gShow = byNoShown.get(no) || [];
-      const gSold = byNoSold.get(no) || [];
-
-      const name = (gShow[gShow.length-1]?.pokemon_name) || (gSold[gSold.length-1]?.pokemon_name) || "";
-      const zh = ZH[no] || "";
-
-      const latestShow = gShow.length ? gShow[gShow.length-1].price_jpy : null;
-      const lastLink = gShow.length ? gShow[gShow.length-1].item_url : (gSold[gSold.length-1]?.item_url || "");
+      const gAll = byNoAll.get(no) || [];
+      const gSold = gAll.filter(x=>x.listing_status==="sold_out" && typeof x.price_jpy==="number");
+      const gOn   = gAll.filter(x=>x.listing_status==="on_sale" && typeof x.price_jpy==="number");
 
       const latestSold = gSold.length ? gSold[gSold.length-1].price_jpy : null;
-      const prevSold = gSold.length>=2 ? gSold[gSold.length-2].price_jpy : null;
-      const d = pct(latestSold, prevSold);
+      const prevSold   = gSold.length>=2 ? gSold[gSold.length-2].price_jpy : null;
+      const deltaSold  = pct(latestSold, prevSold);
 
-      const now = new Date();
-      const cutoff7 = new Date(now.getTime()-7*24*3600*1000);
-      const g7 = gSold.filter(x=>new Date(x.scraped_at) >= cutoff7);
-      const prices7 = g7.map(x=>x.price_jpy).filter(x=>typeof x==="number");
-      const med7 = prices7.length ? median(prices7) : null;
+      const latestOn   = gOn.length ? gOn[gOn.length-1].price_jpy : null;
+
+      const name = (gAll[gAll.length-1]?.pokemon_name) || "";
+      const zh = ZH[no] || "";
 
       rows.push({
         no, name, zh,
-        latestShow, lastLink,
-        latestSold, prevSold, delta:d, med7, count7:prices7.length,
-        soldSeries: gSold
+        gAll, gSold, gOn,
+        latestSold, prevSold, deltaSold,
+        latestOn,
+        count: gAll.length
       });
     }
 
@@ -217,11 +193,19 @@
       return (pad3(r.no)+" "+r.name+" "+r.zh).toLowerCase().includes(q);
     });
 
+    // 狀態過濾（卡片右上角顯示你目前顯示的狀態）
+    filtered = filtered.filter(r=>{
+      if(st==="all") return true;
+      if(st==="sold_out") return r.gSold.length>0;
+      if(st==="on_sale") return r.gOn.length>0;
+      return true;
+    });
+
     const sorter = {
-      delta: (a,b)=>(b.delta??-1e9)-(a.delta??-1e9),
-      latest:(a,b)=>(b.latestShow??-1e9)-(a.latestShow??-1e9),
-      median7:(a,b)=>(b.med7??-1e9)-(a.med7??-1e9),
-      count7:(a,b)=>(b.count7)-(a.count7),
+      delta_sold: (a,b)=>(b.deltaSold??-1e9)-(a.deltaSold??-1e9),
+      latest_sold:(a,b)=>(b.latestSold??-1e9)-(a.latestSold??-1e9),
+      latest_on:(a,b)=>(b.latestOn??-1e9)-(a.latestOn??-1e9),
+      count:(a,b)=>(b.count-a.count),
       id:(a,b)=>(a.no-b.no),
     }[sort] || ((a,b)=>a.no-b.no);
 
@@ -235,45 +219,48 @@
       card.className="card";
       const id = pad3(r.no);
 
-      const deltaText = r.delta==null ? "—" : (r.delta>0?`+${r.delta.toFixed(1)}%`:`${r.delta.toFixed(1)}%`);
-      const cls = deltaClass(r.delta);
+      // 你選擇顯示狀態：all 就顯示「混合」，否則顯示對應
+      const badgeText = st==="all" ? "混合" : (st==="sold_out" ? "已售出" : "交易中");
 
-      const kwNow = document.getElementById("kw").value;
-      const mercariSearch = `https://jp.mercari.com/search?keyword=${encodeURIComponent(kwNow + " No. " + id)}`;
+      const deltaText = r.deltaSold==null ? "—" : (r.deltaSold>0?`+${r.deltaSold.toFixed(1)}%`:`${r.deltaSold.toFixed(1)}%`);
+      const cls = deltaClass(r.deltaSold);
+
+      const lastLink = (st==="on_sale" ? (r.gOn[r.gOn.length-1]?.item_url) : (r.gSold[r.gSold.length-1]?.item_url))
+        || (r.gAll[r.gAll.length-1]?.item_url) || "";
+
+      const mercariSearch = `https://jp.mercari.com/search?keyword=${encodeURIComponent("ポケパークカントー ピンバッジ "+(r.name||""))}`;
 
       card.innerHTML = `
+        <div class="badge">${badgeText}</div>
         <div class="row">
           <div>
             <div class="num">#${id}</div>
             <div class="name">${r.name || "（未抓到）"} <span style="color:var(--muted);font-weight:600">／${r.zh}</span></div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <span class="badge">${document.getElementById("st").value==="on_sale"?"交易中":(document.getElementById("st").value==="sold_out"?"已售出":"混合")}</span>
-            <div class="delta ${cls}" title="漲跌以已售出計算">${deltaText}</div>
-          </div>
+          <div class="delta ${cls}">${deltaText}</div>
         </div>
 
-        <div class="k">目前顯示狀態的最新價格</div>
-        <div class="v">${fmtJPY(r.latestShow)}</div>
+        <div class="k">交易中：目前顯示狀態的最新價格</div>
+        <div class="v">${fmtJPY(r.latestOn)}</div>
 
         <div class="k">已售出：最新成交（前一筆）</div>
         <div class="v">${fmtJPY(r.latestSold)} <span style="color:var(--muted);font-size:12px">（前一筆：${fmtJPY(r.prevSold)}）</span></div>
 
-        <div class="k">已售出：7 日中位數 / 7 日筆數</div>
-        <div class="v">${fmtJPY(r.med7)} <span style="color:var(--muted);font-size:12px">／${r.count7}</span></div>
+        <div class="k">資料筆數</div>
+        <div class="v">${r.count}</div>
 
         <div class="chartWrap"><canvas id="c_${id}"></canvas></div>
 
         <div class="links">
-          ${r.lastLink ? `<a class="pill" href="${r.lastLink}" target="_blank" rel="noopener">最新一筆頁面</a>` : ``}
-          <a class="pill" href="${mercariSearch}" target="_blank" rel="noopener">Mercari 搜尋（No.${id}）</a>
+          ${lastLink ? `<a class="pill" href="${lastLink}" target="_blank" rel="noopener">最新一筆頁面</a>` : ``}
+          <a class="pill" href="${mercariSearch}" target="_blank" rel="noopener">Mercari 搜尋</a>
         </div>
       `;
       grid.appendChild(card);
 
-      // chart 用 sold series
-      const labels = r.soldSeries.map(x=>new Date(x.scraped_at).toLocaleDateString());
-      const data = r.soldSeries.map(x=>x.price_jpy);
+      // chart：用 observed_at 畫（同時把 sold_out / on_sale 都畫進去）
+      const labels = r.gAll.map(x=>new Date(x.observed_at).toLocaleDateString());
+      const data = r.gAll.map(x=>x.price_jpy);
 
       const ctx = card.querySelector(`#c_${id}`);
       new Chart(ctx, {
@@ -296,8 +283,7 @@
   }
 
   document.getElementById("btnReload").addEventListener("click", async ()=>{ await loadData(); render(); });
-  document.getElementById("kw").addEventListener("change", render);
-  document.getElementById("st").addEventListener("change", render);
+  document.getElementById("statusFilter").addEventListener("change", render);
   document.getElementById("sort").addEventListener("change", render);
   document.getElementById("q").addEventListener("input", render);
 
