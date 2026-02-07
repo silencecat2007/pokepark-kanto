@@ -1,47 +1,29 @@
 {
-  "updated_at": "2026-02-07T19:01:22.790797+00:00",
+  "updated_at": "2026-02-07T20:11:28.400307+00:00",
   "count": 0,
   "items": [],
   "debug": [
     {
-      "keyword": "pokemon park kanto pin",
-      "status": "sold_out",
-      "url": "https://jp.mercari.com/search?keyword=pokemon%20park%20kanto%20pin&status=sold_out",
-      "collected_links": 17,
-      "visited_items": 17,
-      "matched_items": 0,
-      "price_null": 0,
-      "errors": 0
-    },
-    {
-      "keyword": "pokemon park kanto pin",
-      "status": "on_sale",
-      "url": "https://jp.mercari.com/search?keyword=pokemon%20park%20kanto%20pin&status=on_sale",
-      "collected_links": 17,
-      "visited_items": 5,
-      "matched_items": 0,
-      "price_null": 0,
-      "errors": 0
-    },
-    {
       "keyword": "ポケパークカントー ピンバッジ",
       "status": "sold_out",
       "url": "https://jp.mercari.com/search?keyword=%E3%83%9D%E3%82%B1%E3%83%91%E3%83%BC%E3%82%AF%E3%82%AB%E3%83%B3%E3%83%88%E3%83%BC%20%E3%83%94%E3%83%B3%E3%83%90%E3%83%83%E3%82%B8&status=sold_out",
-      "collected_links": 80,
-      "visited_items": 78,
+      "collected_links": 40,
+      "visited_items": 40,
       "matched_items": 0,
       "price_null": 0,
-      "errors": 0
+      "errors": 33,
+      "debug_html": "debug/search_ポケパークカントー_ピンバッジ_sold_out.html"
     },
     {
       "keyword": "ポケパークカントー ピンバッジ",
       "status": "on_sale",
       "url": "https://jp.mercari.com/search?keyword=%E3%83%9D%E3%82%B1%E3%83%91%E3%83%BC%E3%82%AF%E3%82%AB%E3%83%B3%E3%83%88%E3%83%BC%20%E3%83%94%E3%83%B3%E3%83%90%E3%83%83%E3%82%B8&status=on_sale",
-      "collected_links": 80,
+      "collected_links": 40,
       "visited_items": 40,
       "matched_items": 0,
       "price_null": 0,
-      "errors": 0
+      "errors": 34,
+      "debug_html": "debug/search_ポケパークカントー_ピンバッジ_on_sale.html"
     }
   ]
 }
