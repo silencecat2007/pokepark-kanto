@@ -15,27 +15,27 @@ OUT.parent.mkdir(parents=True, exist_ok=True)
 POKE_CACHE = Path("data/pokemon_151_ja.json")
 POKE_CACHE.parent.mkdir(parents=True, exist_ok=True)
 
-# 你要的關鍵字（不含編號）
 KEYWORDS = [
     "pokemon park kanto pin",
     "ポケパークカントー ピンバッジ",
 ]
 
-# 同時抓：已售出 + 交易中
 STATUSES = ["sold_out", "on_sale"]
+
+MAX_LINKS_PER_SEARCH = 80        # 每個搜尋頁最多拿幾個 item 連結
+MAX_ITEM_PAGES_TOTAL = 120       # 全部搜尋合計最多打開幾個 item 頁（避免跑太久）
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def sleep_small():
-    time.sleep(random.uniform(0.6, 1.2))
+def sleep_small(a=0.6, b=1.2):
+    time.sleep(random.uniform(a, b))
 
 def quote(s: str) -> str:
     from urllib.parse import quote as _q
     return _q(s, safe="")
 
 def build_search_url(keyword: str, status: str) -> str:
-    # Mercari JP 常見：status=sold_out / on_sale
     return f"https://jp.mercari.com/search?keyword={quote(keyword)}&status={status}"
 
 def text_to_jpy(text: str) -> Optional[int]:
@@ -46,10 +46,7 @@ def text_to_jpy(text: str) -> Optional[int]:
     return int(m.group(1)) if m else None
 
 def load_or_fetch_pokemon_ja() -> List[Dict]:
-    """
-    取得 1~151 的日文名（ja-Hrkt）。
-    會快取到 data/pokemon_151_ja.json，之後 Actions 跑更快。
-    """
+    """抓 1~151 日文名（ja-Hrkt）並快取。"""
     if POKE_CACHE.exists():
         return json.loads(POKE_CACHE.read_text(encoding="utf-8"))
 
@@ -63,32 +60,25 @@ def load_or_fetch_pokemon_ja() -> List[Dict]:
         r.raise_for_status()
         data = r.json()
 
-        ja = None
+        ja = ""
         for n in data.get("names", []):
-            lang = n.get("language", {}).get("name")
-            if lang == "ja-Hrkt":
-                ja = n.get("name")
+            if n.get("language", {}).get("name") == "ja-Hrkt":
+                ja = n.get("name", "")
                 break
-
         if not ja:
-            # fallback：有些情況至少抓 ja
             for n in data.get("names", []):
-                lang = n.get("language", {}).get("name")
-                if lang == "ja":
-                    ja = n.get("name")
+                if n.get("language", {}).get("name") == "ja":
+                    ja = n.get("name", "")
                     break
 
-        out.append({"no": no, "ja": ja or ""})
-        time.sleep(0.05)  # 對 PokeAPI 友善一點
+        out.append({"no": no, "ja": ja})
+        time.sleep(0.05)
 
     POKE_CACHE.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     return out
 
 def make_name_matcher(poke_ja: List[Dict]) -> Tuple[re.Pattern, Dict[str, int]]:
-    """
-    建立「名稱大集合 regex」來快速從標題判定是哪隻。
-    會用最長優先，避免短字撞到長字。
-    """
+    """建立最長優先的名稱 regex，避免短字撞長字。"""
     name_to_no = {}
     names = []
     for row in poke_ja:
@@ -100,26 +90,64 @@ def make_name_matcher(poke_ja: List[Dict]) -> Tuple[re.Pattern, Dict[str, int]]:
         names.append(name)
 
     names.sort(key=len, reverse=True)
-    # 用 re.escape 以免名字包含特殊字
     pat = re.compile("|".join(re.escape(n) for n in names))
     return pat, name_to_no
 
-def extract_title_and_price_from_card(container) -> Tuple[Optional[str], Optional[int]]:
-    title = None
-    price = None
+def collect_item_links(page) -> List[str]:
+    """從搜尋頁收集 /item/ 連結（滾動載入）。"""
+    collected = set()
 
-    img = container.query_selector("img[alt]")
-    if img:
-        title = img.get_attribute("alt")
+    # 等到有 item 連結
+    page.wait_for_selector("a[href^='/item/']", timeout=25000)
+
+    for _ in range(10):
+        links = page.query_selector_all("a[href^='/item/']")
+        for a in links:
+            href = a.get_attribute("href") or ""
+            if href.startswith("/item/"):
+                collected.add("https://jp.mercari.com" + href)
+            if len(collected) >= MAX_LINKS_PER_SEARCH:
+                break
+        if len(collected) >= MAX_LINKS_PER_SEARCH:
+            break
+        page.mouse.wheel(0, 1800)
+        sleep_small()
+
+    return list(collected)
+
+def extract_item_detail(page) -> Tuple[Optional[str], Optional[int], Optional[str]]:
+    """
+    從 item 頁抓：標題 / 價格 / 狀態文字（賣切等）
+    （選擇器可能會變，所以用多段 fallback）
+    """
+    # title
+    title = None
+    h1 = page.query_selector("h1")
+    if h1:
+        t = (h1.inner_text() or "").strip()
+        if t:
+            title = t
 
     if not title:
-        txt = container.inner_text().strip()
-        title = txt.split("\n")[0][:200] if txt else None
+        # fallback：找 meta
+        mt = page.query_selector("meta[property='og:title']")
+        if mt:
+            title = (mt.get_attribute("content") or "").strip() or None
 
-    t = container.inner_text()
-    price = text_to_jpy(t)
+    body_text = (page.inner_text("body") or "")
 
-    return title, price
+    # price
+    price = text_to_jpy(body_text)
+
+    # status hint
+    status_hint = None
+    # 常見：売り切れ / SOLD / 取引中 等
+    for k in ["売り切れ", "SOLD", "取引中", "販売中"]:
+        if k in body_text:
+            status_hint = k
+            break
+
+    return title, price, status_hint
 
 def main():
     poke_ja = load_or_fetch_pokemon_ja()
@@ -140,88 +168,98 @@ def main():
         )
         page = context.new_page()
 
+        seen_item_urls = set()
+        visited_total = 0
+
         for kw in KEYWORDS:
             for st in STATUSES:
                 url = build_search_url(kw, st)
-                page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
-                # 等到至少有一個商品連結出現（/item/）
+                collected_links = 0
+                visited = 0
+                matched = 0
+                errors = 0
+
                 try:
-                    page.wait_for_selector("a[href^='/item/']", timeout=25000)
-                except Exception:
+                    page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                    links = collect_item_links(page)
+                    collected_links = len(links)
+                except Exception as e:
                     debug.append({
                         "keyword": kw,
                         "status": st,
                         "url": url,
-                        "note": "no item links found (maybe blocked / empty / DOM changed)"
+                        "collected_links": 0,
+                        "visited_items": 0,
+                        "matched_items": 0,
+                        "errors": 1,
+                        "note": f"search page failed: {type(e).__name__}"
                     })
                     continue
 
-                max_collect = 160
-                collected = set()
+                # 逐一打開 item 頁抓標題/價格
+                for item_url in links:
+                    if item_url in seen_item_urls:
+                        continue
+                    seen_item_urls.add(item_url)
 
-                # 滾動載入更多
-                for _ in range(10):
-                    links = page.query_selector_all("a[href^='/item/']")
-                    for a in links:
-                        href = a.get_attribute("href") or ""
-                        if not href.startswith("/item/"):
-                            continue
-                        collected.add("https://jp.mercari.com" + href)
-                        if len(collected) >= max_collect:
-                            break
-                    if len(collected) >= max_collect:
+                    if visited_total >= MAX_ITEM_PAGES_TOTAL:
                         break
-                    page.mouse.wheel(0, 1700)
-                    sleep_small()
 
-                matched = 0
-                for item_url in list(collected):
-                    # 找回該 link 對應的 card
-                    a = page.query_selector(f"a[href='{item_url.replace('https://jp.mercari.com','')}']")
-                    if not a:
+                    try:
+                        visited_total += 1
+                        visited += 1
+
+                        page.goto(item_url, wait_until="domcontentloaded", timeout=60000)
+                        sleep_small(0.3, 0.6)
+
+                        title, price, status_hint = extract_item_detail(page)
+                        if not title:
+                            continue
+
+                        m = name_re.search(title)
+                        if not m:
+                            continue  # 標題沒含 151 任何一隻日文名，就跳過
+
+                        pkm_name = m.group(0)
+                        no = name_to_no.get(pkm_name)
+                        if not no:
+                            continue
+
+                        matched += 1
+                        t = now_iso()
+
+                        # UI 需要 sold_at 才能畫圖：這裡用 scraped_at 代替（至少能追蹤趨勢）
+                        items.append({
+                            "keyword": kw,
+                            "listing_status": st,        # sold_out / on_sale
+                            "status_hint": status_hint,  # 取引中/売り切れ等（可選）
+                            "no": no,
+                            "pokemon_name": pkm_name,
+                            "title": title,
+                            "price_jpy": price,
+                            "item_url": item_url,
+                            "sold_at": t,                # 用抓取時間當作時間序列點
+                            "scraped_at": t,
+                        })
+
+                    except Exception:
+                        errors += 1
                         continue
 
-                    container = a.evaluate_handle(
-                        "(el) => el.closest('li') || el.closest('div') || el.parentElement"
-                    )
-                    if not container:
-                        continue
-
-                    title, price = extract_title_and_price_from_card(container)
-                    if not title:
-                        continue
-
-                    m = name_re.search(title)
-                    if not m:
-                        continue  # 標題沒含 151 任何一隻日文名，就跳過
-
-                    pkm_name = m.group(0)
-                    no = name_to_no.get(pkm_name)
-                    if not no:
-                        continue
-
-                    matched += 1
-                    items.append({
-                        "keyword": kw,
-                        "listing_status": st,      # sold_out / on_sale
-                        "no": no,                  # 1~151
-                        "pokemon_name": pkm_name,  # 日文名（ja-Hrkt）
-                        "title": title,
-                        "price_jpy": price,
-                        "item_url": item_url,
-                        "scraped_at": now_iso(),
-                    })
+                    sleep_small(0.5, 1.1)
 
                 debug.append({
                     "keyword": kw,
                     "status": st,
                     "url": url,
-                    "collected_links": len(collected),
-                    "matched_items": matched
+                    "collected_links": collected_links,
+                    "visited_items": visited,
+                    "matched_items": matched,
+                    "errors": errors
                 })
 
-                sleep_small()
+                sleep_small(0.6, 1.2)
 
         context.close()
         browser.close()
