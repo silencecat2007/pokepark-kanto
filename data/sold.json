@@ -1,19 +1,17 @@
 {
-  "updated_at": "2026-02-06T22:01:43.918658+00:00",
+  "updated_at": "2026-02-07T11:22:31.045123+00:00",
   "count": 0,
   "items": [],
   "debug": [
     {
-      "keyword": "ポケパークカントー ピンバッジ",
-      "url": "https://jp.mercari.com/search?keyword=%E3%83%9D%E3%82%B1%E3%83%91%E3%83%BC%E3%82%AF%E3%82%AB%E3%83%B3%E3%83%88%E3%83%BC%20%E3%83%94%E3%83%B3%E3%83%90%E3%83%83%E3%82%B8",
-      "status": 200,
-      "debug_html": "debug/search_ポケパークカントー_ピンバッジ.html"
-    },
-    {
       "keyword": "pokemon park kanto pin",
       "url": "https://jp.mercari.com/search?keyword=pokemon%20park%20kanto%20pin",
-      "status": 200,
-      "debug_html": "debug/search_pokemon_park_kanto_pin.html"
+      "status": 200
+    },
+    {
+      "keyword": "ポケパークカントー ピンバッジ",
+      "url": "https://jp.mercari.com/search?keyword=ポケパークカントー%20ピンバッジ",
+      "status": 200
     }
   ]
 }
