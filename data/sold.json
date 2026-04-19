@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-04-18T21:16:40.896837+00:00",
+  "updated_at": "2026-04-19T21:14:29.129699+00:00",
   "count": 0,
   "items": [],
   "debug": [
@@ -18,11 +18,11 @@
       "keyword": "ポケパークカントー ピンバッジ",
       "status": "on_sale",
       "url": "https://jp.mercari.com/search?keyword=%E3%83%9D%E3%82%B1%E3%83%91%E3%83%BC%E3%82%AF%E3%82%AB%E3%83%B3%E3%83%88%E3%83%BC%20%E3%83%94%E3%83%B3%E3%83%90%E3%83%83%E3%82%B8&status=on_sale",
-      "collected_links": 30,
-      "visited_items": 30,
+      "collected_links": 25,
+      "visited_items": 25,
       "matched_items": 0,
       "price_null": 0,
-      "errors": 27,
+      "errors": 21,
       "debug_html": "debug/search_ポケパークカントー_ピンバッジ_on_sale.html"
     }
   ]
