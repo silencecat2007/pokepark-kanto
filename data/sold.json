@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-12T22:57:22.339958+00:00",
+  "updated_at": "2026-09-13T23:00:41.332473+00:00",
   "count": 0,
   "items": [],
   "debug": [
@@ -11,7 +11,7 @@
       "visited_items": 25,
       "matched_items": 0,
       "price_null": 0,
-      "errors": 21,
+      "errors": 22,
       "debug_html": "debug/search_ポケパークカントー_ピンバッジ_sold_out.html"
     },
     {
@@ -22,7 +22,7 @@
       "visited_items": 35,
       "matched_items": 0,
       "price_null": 0,
-      "errors": 33,
+      "errors": 30,
       "debug_html": "debug/search_ポケパークカントー_ピンバッジ_on_sale.html"
     }
   ]
